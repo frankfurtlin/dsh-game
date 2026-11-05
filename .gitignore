@@ -1,0 +1,10 @@
+# 依赖与运行数据
+node_modules/
+__pycache__/
+*.pyc
+server/data/
+*.log
+.DS_Store
+
+# 验收产物（脚本可重新生成）
+verification/shots/

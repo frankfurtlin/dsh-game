@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>德扑训练器</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3.5' fill='%23b3342f'/%3E%3Cpath d='M8 3.1 12.2 8 8 12.9 3.8 8Z' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#06160f; --bg2:#0a2419;
+  --felt:#15604a; --felt2:#0c4334; --rail:#0a2b20; --rail2:#061a13;
+  --line:rgba(242,193,78,.28); --line2:rgba(255,255,255,.10);
+  --text:#eef6f1; --muted:#8fb5a7; --gold:#f4c95b; --gold-dim:#caa23f;
+  --red:#e8556b; --card:#fbfbf7; --cardtext:#15171a;
+  --ok:#46d98a; --bad:#e8556b; --chip:#3a8d6e;
+  --shadow:0 10px 30px rgba(0,0,0,.45);
+  --r:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:radial-gradient(ellipse at 50% 0%, #0d2a1f 0%, var(--bg) 60%);
+  color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  min-height:100vh;display:flex;justify-content:center;padding:18px;-webkit-font-smoothing:antialiased}
+.app{width:100%;display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+@media(max-width:960px){.app{grid-template-columns:1fr}}
+/* 桌面端满屏规则统一放在样式表**最后**（见文件末尾「桌面端满屏」）：
+   媒体查询不提高优先级，写在前面会被后面的基础规则盖掉。 */
+
+/* ---------- 大厅 ---------- */
+.lobby{grid-column:1/-1;background:linear-gradient(160deg,#0e3a2c,#0a2419);
+  border:1px solid var(--line);border-radius:22px;padding:48px 28px;text-align:center;
+  display:flex;flex-direction:column;gap:26px;align-items:center;box-shadow:var(--shadow)}
+.lobby h1{margin:0;font-size:34px;font-weight:800;letter-spacing:1px;
+  background:linear-gradient(90deg,#f4c95b,#ffe9a8);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lobby .lead{margin:-14px 0 0;color:var(--muted);font-size:15px;max-width:560px;line-height:1.6}
+.opt-row{display:flex;gap:18px;flex-wrap:wrap;justify-content:center}
+.opt{cursor:pointer;width:200px;text-align:left;border:1.5px solid var(--line2);
+  background:rgba(255,255,255,.03);border-radius:16px;padding:20px;transition:.18s;position:relative;overflow:hidden}
+.opt:hover{border-color:var(--line);transform:translateY(-2px)}
+.opt.sel{border-color:var(--gold);background:rgba(244,201,91,.10);box-shadow:0 0 22px rgba(244,201,91,.18)}
+.opt .ico{font-size:26px}
+.opt .big{font-size:20px;font-weight:800;margin-top:8px}
+.opt .sub{font-size:13px;color:var(--muted);margin-top:4px}
+.opt.sel::after{content:"✓";position:absolute;top:12px;right:14px;color:var(--gold);font-weight:800}
+.setup-bar{display:flex;gap:16px;align-items:center;flex-wrap:wrap;justify-content:center;width:100%}
+
+/* ---------- AI 风格选择 ----------
+   原生 <select> 只保留交互（手机上仍是系统选择器、键盘/无障碍不变），
+   外观整块重做：毛毡底 + 金边 + 自绘金色箭头 + 悬停/聚焦光晕，和上面的模式卡、
+   下面的开始按钮同一套语言。旁边再挂一行随选择变化的说明，不用猜每种风格什么意思。 */
+.field{display:flex;flex-direction:column;gap:7px;align-items:stretch;text-align:left;
+  width:min(290px,100%)}
+.field-lbl{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.6px;
+  display:flex;align-items:center;gap:6px;text-transform:uppercase}
+.pick{position:relative;display:flex;align-items:center}
+.pick select{appearance:none;-webkit-appearance:none;-moz-appearance:none;
+  font-family:inherit;font-size:15px;font-weight:700;color:var(--gold);width:100%;
+  background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(0,0,0,.22)),rgba(4,18,13,.72);
+  border:1.5px solid var(--line);border-radius:13px;
+  padding:12px 46px 12px 16px;cursor:pointer;
+  box-shadow:0 4px 14px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.08);
+  transition:border-color .18s,box-shadow .18s,transform .18s,filter .18s}
+.pick select:hover{border-color:var(--gold);transform:translateY(-1px);filter:brightness(1.06);
+  box-shadow:0 8px 20px rgba(0,0,0,.45),0 0 18px rgba(244,201,91,.18),inset 0 1px 0 rgba(255,255,255,.1)}
+.pick select:focus{outline:none;border-color:var(--gold);
+  box-shadow:0 0 0 3px rgba(244,201,91,.22),0 8px 20px rgba(0,0,0,.45)}
+/* 展开的选项列表：桌面 Chrome/Firefox 可上色（macOS 原生列表由系统绘制，忽略此规则也不破版） */
+.pick select option{background:#0a211a;color:var(--text);font-weight:600}
+/* 自绘金色箭头，盖掉系统那个灰箭头；pointer-events:none 保证点击仍落在 select 上 */
+.pick::after{content:"";position:absolute;right:18px;top:50%;width:8px;height:8px;
+  border-right:2px solid var(--gold);border-bottom:2px solid var(--gold);border-radius:1px;
+  transform:translateY(-70%) rotate(45deg);pointer-events:none;transition:transform .2s}
+.pick:hover::after{transform:translateY(-40%) rotate(45deg)}
+.field-hint{font-size:12.5px;color:var(--muted);line-height:1.5}
+.field-hint b{color:var(--gold)}
+
+.start-btn{background:linear-gradient(180deg,#f4c95b,#e0a93a);color:#3a2a00;border:none;
+  padding:15px 48px;border-radius:14px;font-size:18px;font-weight:800;cursor:pointer;
+  box-shadow:0 6px 18px rgba(224,169,58,.35);transition:.15s}
+.start-btn:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.start-btn:active{transform:translateY(1px)}
+
+/* ---------- 牌桌 ---------- */
+.table-wrap{position:relative;display:flex;flex-direction:column;gap:12px;
+  border-radius:28px;background:linear-gradient(160deg,var(--rail),var(--rail2));
+  padding:18px;box-shadow:var(--shadow),inset 0 0 0 1px var(--line2)}
+.table{position:relative;width:100%;aspect-ratio:16/10;border-radius:22px;
+  background:radial-gradient(ellipse at 50% 42%,var(--felt) 0%,var(--felt2) 62%,#093528 100%);
+  box-shadow:inset 0 0 70px rgba(0,0,0,.5),inset 0 0 0 2px rgba(244,201,91,.14)}
+.table::before{content:"";position:absolute;inset:14px;border-radius:16px;
+  border:1px dashed rgba(255,255,255,.07);pointer-events:none}
+
+.seat{position:absolute;transform:translate(-50%,-50%);width:150px;display:flex;
+  flex-direction:column;align-items:center;gap:5px;transition:.3s}
+/* 座位坐标(百分比, 相对桌心) — 留出座位自身尺寸的余量, 避免溢出 */
+.seat.p0{left:50%;top:80%}      /* 你 - 下中部 */
+.seat.p1{left:20%;top:61%}      /* 六人: 左下 */
+.seat.p2{left:12%;top:31%}      /* 左 */
+.seat.p3{left:50%;top:14%}      /* 顶 */
+.seat.p4{left:88%;top:31%}      /* 右 */
+.seat.p5{left:80%;top:61%}      /* 右下 */
+/* 单挑时把 AI 放到对面顶部 */
+.mode2 .seat.p1{left:50%;top:14%}
+
+.plate{position:relative;background:rgba(4,18,13,.78);border:1px solid var(--line2);
+  border-radius:14px;padding:6px 12px;min-width:128px;text-align:center;
+  backdrop-filter:blur(3px);transition:.2s}
+.seat.active .plate{border-color:var(--gold);box-shadow:0 0 24px rgba(244,201,91,.6),
+  0 0 0 2px rgba(244,201,91,.3);transform:scale(1.02)}
+.seat.active.hero .plate{animation:hero-pulse 1.5s ease-in-out infinite}
+@keyframes hero-pulse{
+  0%,100%{box-shadow:0 0 24px rgba(244,201,91,.6),0 0 0 2px rgba(244,201,91,.3)}
+  50%{box-shadow:0 0 36px rgba(244,201,91,.8),0 0 0 3px rgba(244,201,91,.5)}}
+.seat.folded{opacity:.38;filter:grayscale(.6)}
+.plate .nm{font-size:13px;font-weight:700;display:flex;gap:6px;justify-content:center;align-items:center}
+.plate .nm .hero-tag{color:var(--gold)}
+.plate .stk{font-size:12px;color:var(--gold);font-weight:700;margin-top:1px}
+.plate .badge{font-size:10px;color:var(--muted);margin-top:1px;min-height:13px}
+.badge .btn-ic{color:var(--gold)}
+.badge .ai-act{color:#ffd97a}
+.plate .amt{position:absolute;right:-10px;top:-12px;background:var(--gold);color:#3a2a00;
+  font-size:11px;font-weight:800;padding:2px 7px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+.chip{width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#5fd6a7,#2c7d5f);
+  border:1.5px solid rgba(0,0,0,.3);display:inline-block;margin:0 -3px;vertical-align:middle}
+.seat .chips{font-size:0;line-height:0}
+
+/* 牌 */
+.hand{display:flex;gap:5px}
+.card{width:50px;height:72px;border-radius:8px;background:var(--card);color:var(--cardtext);
+  box-shadow:0 4px 8px rgba(0,0,0,.35),0 0 0 1px rgba(0,0,0,.1);position:relative;display:flex;
+  flex-direction:column;justify-content:space-between;padding:5px 6px;user-select:none;
+  border:1px solid rgba(255,255,255,.15);transform-style:preserve-3d;transition:transform .2s}
+.card:hover{transform:translateY(-2px) rotateZ(-2deg);box-shadow:0 6px 12px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.2)}
+.card .cn{position:absolute;top:4px;left:6px;font-weight:800;font-size:15px;line-height:1}
+.card .cs{position:absolute;top:3px;right:5px;font-size:14px;line-height:1}
+.card .cb{position:absolute;bottom:4px;right:6px;font-size:15px;line-height:1;transform:rotate(180deg)}
+.card.red{color:var(--red)}
+.card.black{color:#1b1d22}
+.card.back{background:linear-gradient(135deg,#1f4f9c,#163a73);border:1.5px solid #dfe7ff;
+  background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.14) 0 5px,transparent 5px 10px);
+  box-shadow:0 4px 8px rgba(0,0,0,.4),inset 0 0 15px rgba(0,0,0,.2)}
+.card.back .cn,.card.back .cs,.card.back .cb{display:none}
+.card.sm{width:42px;height:60px}
+.card.sm .cn{font-size:13px}.card.sm .cs,.card.sm .cb{font-size:12px}
+@keyframes deal{from{opacity:0;transform:translateY(-8px) scale(.92)}to{opacity:1;transform:none}}
+.card{animation:deal .25s ease both}
+
+/* 中央区 */
+.center{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);
+  display:flex;flex-direction:column;align-items:center;gap:12px;width:80%;pointer-events:none}
+.pot{background:rgba(4,18,13,.8);border:1px solid var(--line);color:var(--gold);
+  border-radius:20px;padding:5px 20px;font-size:16px;font-weight:800;box-shadow:0 4px 12px rgba(0,0,0,.3),
+  inset 0 1px 0 rgba(255,255,255,.1);letter-spacing:.5px;transition:all .3s ease}
+.pot.update{transform:scale(1.1);color:#ffe9a8}
+.community{display:flex;gap:8px;min-height:72px;align-items:center;transition:gap .3s ease}
+.community.update{gap:12px}
+.banner{font-size:14px;color:var(--gold);min-height:18px;text-align:center;font-weight:600;
+  text-shadow:0 1px 3px rgba(0,0,0,.6);letter-spacing:.3px}
+.controls{width:100%;display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:2px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+button{font-family:inherit;font-size:15px;padding:11px 22px;border-radius:11px;border:none;
+  cursor:pointer;font-weight:700;transition:.14s;color:#fff;box-shadow:0 4px 8px rgba(0,0,0,.3),
+  inset 0 1px 0 rgba(255,255,255,.2);position:relative;overflow:hidden}
+button:disabled{opacity:.3;cursor:not-allowed}
+button:not(:disabled):hover{filter:brightness(1.1);transform:translateY(-2px);box-shadow:0 6px 12px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.3)}
+button:not(:disabled):active{transform:translateY(1px);box-shadow:0 2px 4px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.2)}
+.b-fold{background:linear-gradient(180deg,#7a3240,#5d2430);color:#ffc8d0}
+.b-check,.b-call{background:linear-gradient(180deg,#2a8a63,#1c6a4a);color:#d8ffe9}
+.b-raise{background:linear-gradient(180deg,#f4c95b,#dda63a);color:#3a2a00}
+/* 全下: 一次把筹码推完, 不用反复点"加注"。用紫色, 与弃牌(暗红)/跟注(绿)/加注(金)都区分开。 */
+.b-allin{background:linear-gradient(180deg,#a86bff,#7a3fd6);color:#fff;font-weight:800;
+  letter-spacing:.4px;box-shadow:0 4px 10px rgba(122,63,214,.45),inset 0 1px 0 rgba(255,255,255,.3)}
+.raise-row{display:flex;gap:10px;align-items:center;background:rgba(4,18,13,.7);
+  padding:6px 14px;border-radius:12px;border:1px solid var(--line2)}
+.raise-row input[type=range]{width:210px;accent-color:var(--gold)}
+.raise-row .amt{color:var(--gold);font-weight:800;min-width:46px;text-align:center}
+.ghost-btn{background:rgba(255,255,255,.06);border:1px solid var(--line2);color:var(--muted);padding:8px 16px}
+.ghost-btn:hover{color:var(--text)}
+
+/* ---------- 侧栏 ---------- */
+.panel{background:linear-gradient(180deg,#0d2c21,#0a211a);border:1px solid var(--line);
+  border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:14px;position:sticky;top:18px;
+  box-shadow:var(--shadow),inset 0 0 0 1px rgba(255,255,255,.05)}
+.panel h3{margin:0;font-size:13px;color:var(--muted);font-weight:700;letter-spacing:.5px;
+  text-transform:uppercase;text-align:center;padding-bottom:8px;border-bottom:1px solid var(--line2)}
+.metric{display:flex;flex-direction:column;gap:6px;transition:all .3s ease}
+.metric.update{transform:scale(1.05);color:#ffe9a8}
+.metric .lbl{font-size:13px;color:var(--muted);display:flex;justify-content:space-between;align-items:baseline}
+.metric .lbl b{color:var(--text);font-size:15px;font-weight:800}
+.bar{height:15px;background:rgba(0,0,0,.35);border-radius:8px;overflow:hidden;position:relative}
+.bar .fill{height:100%;border-radius:8px;transition:width .35s ease}
+.bar .mark{position:absolute;top:-4px;bottom:-4px;width:2.5px;background:#fff;opacity:.9;border-radius:2px;box-shadow:0 0 6px rgba(0,0,0,.6)}
+.big{font-size:30px;font-weight:800;line-height:1}
+.big.ok{color:var(--ok)}.big.bad{color:var(--bad)}
+.advice{background:rgba(244,201,91,.08);border:1px solid var(--line);border-radius:12px;
+  padding:11px 13px;font-size:14px;line-height:1.5;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.advice b{color:var(--gold)}
+.ev{font-size:22px;font-weight:800}
+.hint{font-size:12px;color:var(--muted);line-height:1.5}
+.divider{height:1px;background:var(--line2);margin:2px 0}
+.log{font-size:12.5px;color:var(--muted);max-height:150px;overflow-y:auto;display:flex;
+  flex-direction:column;gap:4px}
+.log div{padding:3px 8px;background:rgba(255,255,255,.03);border-radius:6px;border-left:2px solid var(--line2)}
+.log .me{border-left-color:var(--gold);color:var(--text)}
+
+/* ---------- 规则弹窗 ---------- */
+.modal-mask{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.72);
+  backdrop-filter:blur(5px);align-items:center;justify-content:center;padding:16px}
+.modal-mask.show{display:flex}
+.modal{background:linear-gradient(170deg,#0e3327,#0a211a);border:1px solid var(--line);
+  border-radius:18px;max-width:640px;width:100%;max-height:88vh;overflow-y:auto;padding:26px;position:relative;box-shadow:var(--shadow)}
+.modal h2{margin:0 0 14px;text-align:center;color:var(--gold);font-size:22px}
+.modal h3{color:var(--text);font-size:15px;margin:16px 0 6px}
+.modal p,.modal li{color:var(--muted);font-size:14px;line-height:1.7}
+.modal ul{margin:4px 0;padding-left:20px}
+.modal b{color:var(--gold)}
+/* × 不居中是因为全局 button{padding:11px 22px} 也作用到了它：这里固定 32×32，
+   44px 的横向内边距把内容盒挤成 0，字形溢出后被推到偏位。
+   所以必须显式 padding:0，再用 flex 做真正的居中（line-height:1 避免行高把字顶偏）。 */
+.modal .close{position:absolute;top:12px;right:14px;width:32px;height:32px;border-radius:50%;
+  padding:0;display:flex;align-items:center;justify-content:center;line-height:1;
+  border:1px solid var(--line2);background:rgba(255,255,255,.05);color:var(--muted);font-size:18px;cursor:pointer}
+.modal .close:hover{color:var(--text)}
+
+/* ---------- 结算弹窗（每手结束：赢=笑脸 / 输=哭脸 / 平局） ----------
+   放在 #table 内部做绝对定位层，而不是全屏遮罩：它能盖住牌桌，但**永远盖不到**
+   下方的操作区 —— 「再来一局」按钮始终可直接点，不会出现「弹窗挡住按钮，得先关弹窗」
+   的两步操作。mask 本身 pointer-events:none，卡片才接收点击（点一下=立即关闭）。 */
+.result-pop{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  z-index:30;pointer-events:none}
+.result-pop[hidden]{display:none}
+.result-card{pointer-events:auto;cursor:pointer;width:max-content;min-width:250px;
+  max-width:min(520px,94%);background:linear-gradient(170deg,#12402f,#08201a);
+  border:1px solid var(--line);border-radius:20px;padding:16px 22px 14px;text-align:center;
+  box-shadow:0 18px 50px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.06);
+  animation:result-in .3s cubic-bezier(.2,1.35,.5,1) both}
+@keyframes result-in{from{opacity:0;transform:scale(.84) translateY(12px)}to{opacity:1;transform:none}}
+.result-face{font-size:54px;line-height:1;animation:face-pop .55s ease both}
+@keyframes face-pop{0%{transform:scale(.3) rotate(-14deg)}62%{transform:scale(1.16)}100%{transform:scale(1)}}
+.result-head{font-size:21px;font-weight:800;margin-top:6px;line-height:1.3}
+.result-head.win{color:var(--ok)}
+.result-head.lose{color:var(--bad)}
+.result-head.tie{color:var(--gold)}
+.result-sub{font-size:13px;color:var(--muted);margin-top:5px;line-height:1.5}
+.result-rows{display:flex;flex-direction:column;gap:5px;margin-top:11px}
+.result-rows:empty{display:none}
+.result-rows .row{display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 9px;
+  background:rgba(255,255,255,.04);border-radius:9px;text-align:left}
+.result-rows .row.win{background:rgba(244,201,91,.12);box-shadow:inset 0 0 0 1px rgba(244,201,91,.22)}
+.result-rows .who{font-weight:700;white-space:nowrap}
+.result-rows .hd{color:var(--muted);font-size:12px;white-space:nowrap}
+.result-rows .hold{display:flex;gap:3px;margin-left:auto}
+.result-rows .gain{color:var(--gold);font-weight:800;font-variant-numeric:tabular-nums;
+  min-width:46px;text-align:right}
+/* 弹窗里的小牌：用 0,3,0 的特异性压过 .card.sm 与宽屏媒体查询里的 .card 尺寸规则 */
+.result-rows .hold .card{width:27px;height:38px;border-radius:5px;padding:2px 3px;animation:none}
+.result-rows .hold .card .cn{font-size:11px;top:2px;left:3px}
+.result-rows .hold .card .cs{font-size:10px;top:1px;right:3px}
+.result-rows .hold .card .cb{display:none}
+.result-timer{height:3px;background:rgba(255,255,255,.10);border-radius:2px;overflow:hidden;margin-top:12px}
+.result-timer i{display:block;height:100%;width:100%;background:var(--gold)}
+@keyframes result-countdown{from{width:100%}to{width:0}}
+.result-tip{font-size:11px;color:var(--muted);margin-top:6px;opacity:.8}
+
+/* 窄屏: 缩小座位与牌, 避免拥挤/重叠 */
+@media(max-width:1100px){
+  .seat{width:118px}
+  .plate{min-width:104px;padding:5px 8px}
+  .card{width:42px;height:60px}
+  .card .cn{font-size:13px}.card .cs,.card .cb{font-size:12px}
+  .card.sm{width:36px;height:52px}
+  .card.sm .cn{font-size:12px}.card.sm .cs,.card.sm .cb{font-size:11px}
+  .plate .nm{font-size:12px}.plate .stk{font-size:11px}
+}
+
+/* 手机: 椭圆环绕布局在此宽度下必然重叠 —— 改为竖向堆叠
+   (对手一行 → 公共牌/底池 → 你的牌 → 按钮) */
+@media(max-width:700px){
+  body{padding:10px;overflow-x:hidden}
+  .app{grid-template-columns:1fr;gap:12px}
+  .lobby{padding:32px 18px}
+  .lobby h1{font-size:26px}
+  .opt{width:100%}
+  /* AI 风格选择与模式卡同宽（.field 用的是 min(290px,100%)，这里不必再覆盖） */
+  .table-wrap{padding:12px;border-radius:20px}
+  .table{aspect-ratio:auto;display:flex;flex-direction:column;gap:10px;
+    padding:12px 10px;border-radius:16px}
+  .table::before{display:none}
+  .seats{display:contents}
+  .seat{position:static;transform:none;width:auto;min-width:0;order:1}
+  .seat.p0{order:3;width:100%;align-items:center}
+  .seat .hand{order:0}
+  .center{position:static;transform:none;width:100%;order:2;pointer-events:auto;gap:8px}
+  .pot{padding:4px 14px;font-size:14px}
+  .community{min-height:0;gap:6px;flex-wrap:wrap;justify-content:center}
+  .card{width:38px;height:54px}
+  .card .cn{font-size:12px}.card .cs,.card .cb{font-size:11px}
+  .card.sm{width:32px;height:46px}
+  .card.sm .cn{font-size:11px}.card.sm .cs,.card.sm .cb{font-size:10px}
+  .plate{min-width:88px;padding:4px 8px;border-radius:11px}
+  .plate .nm{font-size:11px}.plate .stk{font-size:11px}.plate .badge{font-size:9px;min-height:11px}
+  .plate .amt{right:-6px;top:-10px;font-size:10px;padding:1px 6px}
+  .banner{font-size:13px}
+  .controls{gap:6px}
+  .actions{gap:7px}
+  button{font-size:14px;padding:11px 14px;flex:1 1 auto;min-width:0}
+  .raise-row{width:100%;padding:6px 10px}
+  .raise-row input[type=range]{width:auto;flex:1}
+  .panel{position:static}
+}
+
+/* ---------- 桌面端满屏 ---------- */
+/* 必须放在样式表最后：媒体查询不提高选择器优先级，同优先级下靠后的规则赢。
+   第一版把 .table 的覆盖写在 .table{aspect-ratio:16/10} 之前，被后者盖掉，
+   只剩 max-height 生效 —— 牌桌被压成 1490x750（比例 1.99 而非 1.6）。
+   做法：整页锁 100vh 且不滚动，.app 撑满视口；.table-wrap 本来就是纵向 flex，
+   让 .table 吃掉剩余高度即可。座位用百分比定位，所以不必再锁 16:10 ——
+   宽高比随可用空间变化不会影响座位布局。大厅 .lobby 跨两列，直接 height:100%。
+   窄屏（≤960px）不进入这块，仍走上面的自适应/堆叠布局。 */
+@media(min-width:961px){
+  html,body{height:100%}
+  body{height:100vh;padding:14px;overflow:hidden}
+  .app{max-width:none;width:100%;height:100%;gap:14px;align-items:stretch;
+    grid-template-columns:minmax(0,1fr) 360px;grid-template-rows:minmax(0,1fr)}
+  /* 这里必须用 100vh 算出**确定**高度，不能写 height:100%。
+     百分比链（.app 的 100% → .table-wrap 的 100%）在网格项里解析不确定，
+     .table-wrap 被 align-items:stretch 拉到 1052px，但这个尺寸没进入 flex 布局计算，
+     于是 .table 的 flex-grow 无处可分配 —— 实测牌桌高度是 0，所有座位塌到同一行。
+     calc(100vh - 28px) 是确定值（28 = body 上下 padding 14×2），flex 才能正常分配。 */
+  .lobby,.table-wrap,.panel{height:calc(100vh - 28px)}
+  .lobby{padding:38px 30px;gap:clamp(20px,3.4vh,38px)}
+  .table-wrap{min-height:0}
+  .table{flex:1 1 auto;min-height:0;aspect-ratio:auto;border-radius:26px}
+  .panel{position:static;overflow-y:auto}
+}
+
+/* 大厅的装饰牌（一副黑桃 10-J-Q-K-A 摆成扇形）。纯装饰，不参与交互。 */
+.lobby-fan{display:flex;justify-content:center;align-items:flex-end;height:92px}
+.lobby-fan .card{margin:0 -7px;pointer-events:none;box-shadow:0 10px 22px rgba(0,0,0,.55)}
+.lobby-fan .card:nth-child(1){transform:rotate(-16deg) translateY(9px)}
+.lobby-fan .card:nth-child(2){transform:rotate(-8deg) translateY(3px)}
+.lobby-fan .card:nth-child(3){transform:translateY(-5px);z-index:3}
+.lobby-fan .card:nth-child(4){transform:rotate(8deg) translateY(3px)}
+.lobby-fan .card:nth-child(5){transform:rotate(16deg) translateY(9px)}
+
+/* 满屏后空间够用，把大厅和牌桌元素放大一档。
+   用 1201px 起而不是 961px，避开 max-width:1100 那档「缩小座位与牌」的规则。 */
+@media(min-width:1201px){
+  .lobby h1{font-size:46px}
+  .lobby .lead{font-size:16.5px;max-width:660px}
+  .opt{width:290px;padding:26px 24px}
+  .opt .ico{font-size:34px}
+  .opt .big{font-size:23px}
+  .opt .sub{font-size:14px}
+  .start-btn{padding:19px 72px;font-size:20px}
+  .card{width:64px;height:92px}
+  .card .cn{font-size:19px}.card .cs,.card .cb{font-size:18px}
+  .card.sm{width:54px;height:78px}
+  .card.sm .cn{font-size:16px}.card.sm .cs,.card.sm .cb{font-size:15px}
+  .seat{width:176px}
+  .plate{min-width:150px;padding:8px 14px}
+  .plate .nm{font-size:14px}.plate .stk{font-size:13px}
+  .community{gap:10px;min-height:92px}
+  .pot{font-size:18px;padding:7px 24px}
+  .panel{padding:22px;gap:16px}
+}
+</style>
+</head>
+<body>
+  <!-- 规则弹窗 -->
+  <div class="modal-mask" id="rulesModal">
+    <div class="modal">
+      <button class="close" onclick="document.getElementById('rulesModal').classList.remove('show')">×</button>
+      <h2>📖 德州扑克规则</h2>
+      <h3>🎯 目标</h3>
+      <p>用你的 2 张牌 + 中央 5 张公共牌，拼出最大的 5 张牌。谁大谁赢走所有筹码。</p>
+      <h3>🃏 牌型大小（从大到小）</h3>
+      <ul>
+        <li>同花顺（连牌+同花）&gt; 四条 &gt; 葫芦 &gt; 同花 &gt; 顺子 &gt; 三条 &gt; 两对 &gt; 一对 &gt; 高牌</li>
+      </ul>
+      <h3>🎲 一局怎么走</h3>
+      <ul>
+        <li>翻牌前：先下盲注，然后决定</li>
+        <li>翻牌：发 3 张公共牌</li>
+        <li>转牌：再发 1 张</li>
+        <li>河牌：最后发 1 张</li>
+        <li>摊牌：没弃牌的亮牌比大小（多人按边池分层结算）</li>
+      </ul>
+      <h3>🤏 你能做什么</h3>
+      <ul>
+        <li><b>过牌</b>：不花钱，继续传给对方（没人下注时才能用）</li>
+        <li><b>跟注</b>：补齐和当前最高注一样多的钱</li>
+        <li><b>加注</b>：放更多钱，逼别人跟或弃</li>
+        <li><b>弃牌</b>：认输，已下注的钱拿不回</li>
+      </ul>
+      <h3>🧠 怎么判断该不该跟</h3>
+      <p>看右侧：<b>胜率进度条超过白线就跟，没到就弃</b></p>
+      <p>白线 = 需要的最低胜率 = 你要跟的钱 / (池子+你要跟的钱)</p>
+      <p>多人底池里「对手数」会影响你的真实胜率（人越多越难赢），进度条已按当前活着的对手数计算。</p>
+    </div>
+  </div>
+
+  <div class="app">
+  <!-- 大厅 -->
+  <div id="lobby" class="lobby">
+    <div class="lobby-fan" aria-hidden="true">
+      <div class="card sm black"><span class="cn">10</span><span class="cs">♠</span><span class="cb">♠</span></div>
+      <div class="card sm black"><span class="cn">J</span><span class="cs">♠</span><span class="cb">♠</span></div>
+      <div class="card sm black"><span class="cn">Q</span><span class="cs">♠</span><span class="cb">♠</span></div>
+      <div class="card sm black"><span class="cn">K</span><span class="cs">♠</span><span class="cb">♠</span></div>
+      <div class="card sm black"><span class="cn">A</span><span class="cs">♠</span><span class="cb">♠</span></div>
+    </div>
+    <h1>🂡 德扑训练器</h1>
+    <p class="lead">练你的决策：每次轮到你，实时显示真实胜率、底池赔率、跟注 EV 与 GTO 建议。单挑或六人桌任选。</p>
+    <div class="opt-row">
+      <div class="opt sel" data-n="2" onclick="pickN(2)">
+        <div class="ico">⚔️</div><div class="big">单挑 · 2 人</div><div class="sub">你 vs 1 个 AI</div>
+      </div>
+      <div class="opt" data-n="6" onclick="pickN(6)">
+        <div class="ico">🎰</div><div class="big">六人桌 · 6 人</div><div class="sub">你 vs 5 个 AI（含边池）</div>
+      </div>
+    </div>
+    <div class="setup-bar">
+      <div class="field">
+        <label class="field-lbl" for="aiSelect">🎲 AI 风格</label>
+        <div class="pick">
+          <select id="aiSelect" aria-describedby="aiHint" onchange="syncAiHint()">
+            <option value="loose_aggressive">松凶（爱加注）</option>
+            <option value="tight_passive">紧弱（保守）</option>
+            <option value="gto_approx">GTO近似（最难）</option>
+          </select>
+        </div>
+        <div class="field-hint" id="aiHint"></div>
+      </div>
+    </div>
+    <button class="start-btn" onclick="startGame()">开始牌局</button>
+    <p class="hint">提示：六人桌胜率会被更多对手稀释，注意右侧「对手数」。</p>
+  </div>
+
+  <!-- 牌桌 -->
+  <div id="tableWrap" class="table-wrap" style="display:none">
+    <div class="table" id="table">
+      <div class="seats" id="seats"></div>
+      <div class="center">
+        <div class="pot" id="pot">底池 0</div>
+        <div class="community" id="community"></div>
+        <div class="banner" id="banner">发牌中…</div>
+      </div>
+      <!-- 本手结算弹窗（自动消失；点卡片立即关闭；点「再来一局」也会立刻消失） -->
+      <div class="result-pop" id="resultPop" role="status" aria-live="polite" hidden>
+        <div class="result-card" id="resultCard" onclick="hideResultPop()" title="点击立即关闭">
+          <div class="result-face" id="resultFace">😄</div>
+          <div class="result-head" id="resultHead"></div>
+          <div class="result-sub" id="resultSub" hidden></div>
+          <div class="result-rows" id="resultRows"></div>
+          <div class="result-timer"><i id="resultBar"></i></div>
+          <div class="result-tip">点一下立即关闭 · 或点「再来一局」直接开下一局</div>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="actions" id="actions"></div>
+      <div class="raise-row" id="raiseRow" style="display:none">
+        <span class="hint">加注到</span>
+        <input type="range" id="raiseSlider">
+        <span class="amt" id="raiseAmt">0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 侧栏 -->
+  <div id="panel" class="panel" style="display:none">
+    <div class="setup" style="display:flex;gap:8px">
+      <button class="ghost-btn" style="flex:1" onclick="backToLobby()">换模式</button>
+      <button class="ghost-btn" style="flex:1" onclick="document.getElementById('rulesModal').classList.add('show')">📖 规则</button>
+      <button class="ghost-btn" style="flex:1" id="fsBtn" onclick="toggleFullscreen()">⛶ 全屏</button>
+    </div>
+    <div class="divider"></div>
+    <h3>决策辅助 · 你的视角</h3>
+    <div class="metric">
+      <div class="lbl"><span>成牌牌型</span><b id="strengthVal">—</b></div>
+      <div class="hint" id="strengthHint">翻牌后才成型</div>
+    </div>
+    <div class="metric">
+      <div class="lbl"><span>你的胜率</span><b id="eqPct">—</b></div>
+      <div class="bar"><div class="fill" id="eqFill" style="width:0;background:var(--ok)"></div><div class="mark" id="eqMark" style="left:0"></div></div>
+      <div class="hint" id="eqHint">白线 = 需要的最低胜率（底池赔率）</div>
+    </div>
+    <div class="metric">
+      <div class="lbl"><span>跟注 EV</span><b id="evVal">—</b></div>
+      <div class="hint" id="evHint"></div>
+    </div>
+    <div class="advice"><b>建议</b>：<span id="adviceText">—</span></div>
+    <div class="divider"></div>
+    <h3>本场战绩</h3>
+    <div class="hint" id="sessionStats">本场：0 手 · 赢 0 · 净 0</div>
+    <h3>本手记录</h3>
+    <div class="log" id="log"></div>
+  </div>
+  </div><!-- /.app -->
+
+<script>
+const SUITS = {s:"♠", h:"♥", d:"♦", c:"♣"};
+const RED = new Set(["h","d"]);
+let GID=null, STATE=null, N_PLAYERS=2, AI_STYLE="loose_aggressive";
+let SS={hands:0,wins:0,net:0}; const START_STACK=200; let LAST_STACK=START_STACK;
+
+function cardHTML(code, small){
+  if(code===null||code===undefined){
+    return `<div class="card ${small?'sm':''} back"></div>`;
+  }
+  const r=code[0]==="T"?"10":code[0], s=code[1];
+  const cls=RED.has(s)?"red":"black";
+  return `<div class="card ${small?'sm':''} ${cls}"><span class="cn">${r}</span><span class="cs">${SUITS[s]}</span><span class="cb">${SUITS[s]}</span></div>`;
+}
+function handsHTML(codes, small){
+  if(!codes) return cardHTML(null,small)+cardHTML(null,small);
+  return codes.map(c=>cardHTML(c,small)).join("");
+}
+function chipHTML(n){
+  const show=Math.min(5,n);
+  let s='<span class="chips">';
+  for(let i=0;i<show;i++) s+='<span class="chip"></span>';
+  return s+'</span>';
+}
+function log(msg, me){
+  const d=document.createElement("div");
+  if(me) d.className="me";
+  d.textContent=msg;
+  const box=document.getElementById("log");
+  box.appendChild(d); box.scrollTop=box.scrollHeight;
+}
+
+/* ---------- 结算弹窗 ----------
+   旧版只有一行 banner：「平局，平分底池」——不看牌桌根本不知道是谁跟谁平、各拿多少；
+   赢了输了也只有一行字。这里把 result 里后端算好的明细（payouts/pots/ranks）翻成
+   人话：谁赢了、谁跟谁平、赢多少、什么牌型，并用一张会自动消失的弹窗说清楚。 */
+const RESULT_POP_MS = 5000;                 // 自动消失时间（与进度条动画同一个值）
+let resultHideTimer=null, resultShownGid=null;
+
+function hideResultPop(){
+  const pop=document.getElementById("resultPop");
+  if(pop) pop.hidden=true;
+  if(resultHideTimer){ clearTimeout(resultHideTimer); resultHideTimer=null; }
+}
+
+function showResultPop(v){
+  const pop=document.getElementById("resultPop");
+  if(!pop) return;
+  document.getElementById("resultFace").textContent=v.face;
+  const head=document.getElementById("resultHead");
+  head.textContent=v.head; head.className="result-head "+v.tone;
+  const sub=document.getElementById("resultSub");
+  sub.textContent=v.sub||""; sub.hidden=!v.sub;
+  document.getElementById("resultRows").innerHTML=v.rowsHTML||"";
+  pop.hidden=false;
+  // 重启倒计时动画：同一个元素复用，必须先置 none 再触发重排，否则第二手不会重播
+  const bar=document.getElementById("resultBar");
+  bar.style.animation="none"; void bar.offsetWidth;
+  bar.style.animation=`result-countdown ${RESULT_POP_MS}ms linear forwards`;
+  if(resultHideTimer) clearTimeout(resultHideTimer);
+  resultHideTimer=setTimeout(hideResultPop, RESULT_POP_MS);
+}
+
+/* 把后端 result 翻成「弹窗 + banner + 日志」三处文案。
+   关键区分：winners 里有多人 ≠ 平局 —— 边池会让不同人各赢一层（各拿的钱还不同）。
+   只有「同一个池被同牌型的多人平分」才算平局，所以以 pots[].split 为准。 */
+function settle(s){
+  const r=s.result||{}, seats=s.seats||[];
+  const payouts=r.payouts||[], ranks=r.ranks||{};
+  const winners=(r.winners||[]).filter(w=>w!==null&&w!==undefined);
+  const got=i=>(payouts[i]===undefined?0:payouts[i]);
+  const nm=i=>i===0?"你":(seats[i]?seats[i].name:`P${i}`);
+  const contrib=(seats[0]&&seats[0].contrib)||0;
+  const net=got(0)-contrib;
+  const signed=n=>(n>=0?"+":"")+n;
+  const gainList=winners.map(i=>`${nm(i)} +${got(i)}`).join("、");
+  const splitPots=(r.pots||[]).filter(p=>p.split);
+  const tieSeats=[];
+  splitPots.forEach(p=>(p.winners||[]).forEach(w=>{
+    if(tieSeats.indexOf(w.seat)<0) tieSeats.push(w.seat);
+  }));
+  const tieAmt=splitPots.reduce((a,p)=>a+(p.amount||0),0);
+  const heroWin=winners.indexOf(0)>=0;
+  const heroFolded=!!(seats[0]&&seats[0].folded);   // 非摊牌收池时，说清是谁弃的牌
+  const foldLabel=heroFolded?"你已弃牌":"其他人弃牌";
+
+  // 明细行：赢家在前（按拿到的筹码降序），其余摊牌者后排；弃牌且没拿钱的不列
+  const rows=[];
+  const rowOf=i=>{
+    const st=seats[i]; if(!st) return "";
+    const cards=(st.hole||[]).map(c=>cardHTML(c,true)).join("");
+    const win=winners.indexOf(i)>=0;
+    return `<div class="row${win?" win":""}">`
+      +`<span class="who">${i===0?"🙋 你":st.name}</span>`
+      +`<span class="hd">${ranks[String(i)]||(win?"":"已弃牌")}</span>`
+      +`<span class="hold">${cards}</span>`
+      +`<b class="gain">${win?"+"+got(i):""}</b></div>`;
+  };
+  if(r.showdown){
+    winners.slice().sort((a,b)=>got(b)-got(a))
+      .concat(seats.map(x=>x.idx).filter(i=>winners.indexOf(i)<0&&seats[i].in_hand))
+      .forEach(i=>rows.push(rowOf(i)));
+  } else if(winners.length){
+    // 全弃牌：没有摊牌牌型，只亮赢家的牌；谁弃的牌已在副标题里说明（此处不重复）
+    const i=winners[0], st=seats[i]||{};
+    const cards=(st.hole||[]).map(c=>cardHTML(c,true)).join("");
+    rows.push(`<div class="row win"><span class="who">${i===0?"🙋 你":st.name}</span>`
+      +`<span class="hd">${heroFolded?"":"其他人弃牌"}</span><span class="hold">${cards}</span>`
+      +`<b class="gain">+${got(i)}</b></div>`);
+  }
+  const rowsHTML=rows.join("");
+
+  // 表情只看**你自己**这手的结果：赢了笑脸、没拿到筹码哭脸、
+  // 拿到筹码但没独赢（平局 / 各赢一层）用握手。文字里再说清是哪几家平、谁赢的。
+  const whoWon=winners.map(nm).join("、");
+  const tieText=splitPots.length?`平局：${tieSeats.map(nm).join("、")} 平分 ${tieAmt}`:"";
+  let face,tone,head,sub,banner,line;
+  if(heroWin&&winners.length===1){                // 你一家独赢
+    face="😄"; tone="win";
+    head=`你赢了 +${got(0)}`;
+    sub=`本手净 ${signed(net)}（底池 ${r.pot}）`;
+    banner=`🏆 你赢了 +${got(0)}`;
+    line=`你赢得 ${got(0)}`;
+  } else if(heroWin&&splitPots.length){           // 你也在被平分的池里
+    face="🤝"; tone="tie";
+    head=tieText;
+    sub=`本手分配 ${gainList}；你净 ${signed(net)}`;
+    banner=`🤝 ${tieText}`;
+    line=`${tieText}（${gainList}）`;
+  } else if(heroWin){                             // 多家拿钱但没人被平分：各赢一层边池
+    face="🀄"; tone="tie";
+    head=`分池：${gainList}`;
+    sub=`摊牌各赢一层边池，没有平局；你净 ${signed(net)}`;
+    banner=`🀄 分池：${gainList}`;
+    line=`分池：${gainList}`;
+  } else if(tieText){                             // 你没分到筹码，但摊牌有人平分
+    face="😭"; tone="lose";
+    head=tieText;
+    sub=`你没分到池子 · 你净 ${signed(net)}`;
+    banner=`😖 ${tieText}`;
+    line=`${tieText}（你净 ${signed(net)}）`;
+  } else {                                        // 输给一家 / 被几家分走 —— 说清是谁赢的
+    const rank=(winners.length===1&&ranks[String(winners[0])])||"";
+    face="😭"; tone="lose";
+    head=winners.length>1?`${whoWon} 分走了底池`:`${whoWon} 赢了这手`;
+    sub=(rank?`对手牌型：${rank} · `:(r.showdown?"":`${foldLabel} · `))+`你净 ${signed(net)}`;
+    banner=rank?`😖 ${whoWon} 赢了这手（${rank}）`:`😖 ${whoWon} 赢了这手`;
+    line=rank?`${whoWon} 赢得 ${r.pot}（${rank}）`:`${whoWon} 赢得 ${r.pot}`;
+  }
+  return {face,tone,head,sub,banner,line,rowsHTML};
+}
+
+/* AI 风格的说明文案：与下拉框选项一一对应，切换时同步更新。
+   写在这里而不是 HTML 里，是为了让「选项 → 说明」只有一份事实来源。 */
+const AI_STYLE_INFO={
+  loose_aggressive:{name:"松凶", desc:"爱加注、会诈唬：中等牌力也敢施压，别用「加注=大牌」去读它"},
+  tight_passive:{name:"紧弱", desc:"只玩好牌、很少加注：等它主动下注时，通常手里有货"},
+  gto_approx:{name:"GTO近似", desc:"按胜率与底池赔率出牌，最难打：少犯错，别指望它送钱"},
+};
+function syncAiHint(){
+  const sel=document.getElementById("aiSelect"), box=document.getElementById("aiHint");
+  if(!sel||!box) return;
+  const info=AI_STYLE_INFO[sel.value]||{name:sel.value,desc:""};
+  box.innerHTML=`<b>${info.name}</b>：${info.desc}`;
+}
+syncAiHint();                                   // 首屏就填好，不留一行空说明
+
+function pickN(n){
+  N_PLAYERS=n;
+  document.querySelectorAll(".opt").forEach(o=>o.classList.toggle("sel",+o.dataset.n===n));
+}
+function startGame(){
+  AI_STYLE=document.getElementById("aiSelect").value;
+  SS={hands:0,wins:0,net:0}; LAST_STACK=START_STACK;
+  hideResultPop();
+  document.getElementById("log").innerHTML="";
+  document.getElementById("sessionStats").textContent="本场：0 手 · 赢 0 · 净 0";
+  document.getElementById("lobby").style.display="none";
+  document.getElementById("tableWrap").style.display="flex";
+  document.getElementById("panel").style.display="flex";
+  document.getElementById("table").className="table"+(N_PLAYERS===2?" mode2":"");
+  document.getElementById("banner").textContent="发牌中…";
+  fetch("api/new",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({n_players:N_PLAYERS,ai_style:AI_STYLE,stacks:START_STACK})})
+    .then(r=>r.json()).then(s=>{log("— 新一局开始 —");render(s);});
+}
+function backToLobby(){
+  hideResultPop();
+  document.getElementById("lobby").style.display="flex";
+  document.getElementById("tableWrap").style.display="none";
+  document.getElementById("panel").style.display="none";
+}
+function nextHand(){
+  hideResultPop();                       // 点「再来一局」→ 弹窗立即消失，再开下一局
+  document.getElementById("banner").textContent="发牌中…";
+  fetch("api/new",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({n_players:N_PLAYERS,ai_style:AI_STYLE,stacks:START_STACK})})
+    .then(r=>r.json()).then(s=>{log("— 新一局 —");render(s);});
+}
+
+function renderSeats(s){
+  const wrap=document.getElementById("seats");
+  wrap.innerHTML="";
+  s.seats.forEach(seat=>{
+    const tags=[];
+    if(seat.is_button) tags.push('<span class="btn-ic">🔘</span>');
+    if(seat.all_in) tags.push('🔥ALLIN');
+    const last=seat.last_action?`<span class="ai-act">${seat.last_action}</span>`:"";
+    const amt=seat.street_bet>0?`<div class="amt">${seat.street_bet}</div>`:"";
+    const plate=document.createElement("div");
+    plate.className="plate";
+    plate.innerHTML=`<div class="nm">${seat.is_hero?'<span class="hero-tag">🙋 你</span>':seat.name}</div>`+
+      `<div class="stk">${seat.stack}</div>`+
+      `<div class="badge">${tags.join(" ")} ${last}</div>`+amt;
+    const hand=document.createElement("div");
+    hand.className="hand";
+    hand.innerHTML=handsHTML(seat.hole,true);
+    const seatDiv=document.createElement("div");
+    seatDiv.className=`seat p${seat.idx}`+(seat.to_act?" active":"")+(seat.folded?" folded":"");
+    seatDiv.appendChild(hand);
+    seatDiv.appendChild(plate);
+    wrap.appendChild(seatDiv);
+  });
+}
+
+function render(s){
+  STATE=s; GID=s.game_id;
+  document.getElementById("pot").textContent="底池 "+s.pot;
+  const comm=[...s.board]; while(comm.length<5) comm.push(null);
+  document.getElementById("community").innerHTML=comm.map(c=>cardHTML(c,false)).join("");
+  renderSeats(s);
+
+  if(s.equity){
+    const eq=s.equity;
+    document.getElementById("eqPct").textContent=(eq.equity*100).toFixed(1)+"%";
+    const fill=document.getElementById("eqFill");
+    fill.style.width=(eq.equity*100)+"%";
+    fill.style.background=eq.equity>=eq.need?"var(--ok)":"var(--bad)";
+    document.getElementById("eqMark").style.left=(eq.need*100)+"%";
+    document.getElementById("evVal").textContent=(eq.ev>=0?"+":"")+eq.ev;
+    document.getElementById("evVal").style.color=eq.ev>=0?"var(--ok)":"var(--bad)";
+    document.getElementById("evHint").textContent=
+      `跟注 ${eq.call_amount}，对 ${eq.n_opponents} 名对手，需胜率 ≥ ${(eq.need*100).toFixed(1)}%`;
+  } else {
+    document.getElementById("eqPct").textContent="—";
+    document.getElementById("eqFill").style.width="0";
+    document.getElementById("evVal").textContent="—";
+    document.getElementById("evHint").textContent="";
+  }
+  document.getElementById("adviceText").textContent=s.advice||"—";
+  document.getElementById("strengthVal").textContent=s.hand_strength||"—";
+  document.getElementById("strengthHint").textContent=
+    s.hand_strength?"你目前的成牌（7 选 5）":"翻牌后才成型";
+
+  const acts=document.getElementById("actions"); acts.innerHTML="";
+  const raiseRow=document.getElementById("raiseRow"); raiseRow.style.display="none";
+  if(s.result){
+    const v=settle(s);
+    document.getElementById("banner").textContent=v.banner;
+    if(!s._counted){
+      s._counted=true; SS.hands++;
+      if(s.result.winners.length===1&&s.result.winners[0]===0) SS.wins++;
+      SS.net+=s.you_stack-START_STACK;
+      document.getElementById("sessionStats").textContent=
+        `本场：${SS.hands} 手 · 赢 ${SS.wins}（${(SS.wins/SS.hands*100).toFixed(0)}%）· 净 ${SS.net>=0?"+":""}${SS.net}`;
+    }
+    // 同一手只弹一次（重渲染不重播）；新一局 game_id 不同，自然会再弹
+    if(resultShownGid!==s.game_id){
+      resultShownGid=s.game_id;
+      showResultPop(v);
+    }
+    const nb=document.createElement("button");
+    nb.className="b-raise"; nb.textContent="再来一局"; nb.onclick=nextHand;
+    acts.appendChild(nb); return;
+  }
+  if(!s.you_to_act){
+    document.getElementById("banner").textContent="AI 思考中…";
+    return;
+  }
+  document.getElementById("banner").textContent="轮到你行动";
+  const legal=s.legal; const kinds=new Set(legal.map(a=>a.kind));
+  const mk=(label,cls,fn,ok)=>{const b=document.createElement("button");b.className=cls;b.textContent=label;b.disabled=!ok;b.onclick=fn;acts.appendChild(b);return b;};
+  mk("弃牌","b-fold",()=>send("fold"),kinds.has("fold"));
+  mk("过牌","b-check",()=>send("check"),kinds.has("check"));
+  if(kinds.has("call")){
+    const callAmt=Math.min(s.current_bet-s.seats[0].street_bet,s.you_stack);
+    const callLegal=legal.find(a=>a.kind==="call");
+    const callAllin=!!(callLegal&&callLegal.is_allin);
+    mk(`跟注 ${callAmt}`+(callAllin?"（全下）":""),"b-call",()=>send("call",callAmt,callAllin),true);
+  }
+  if(kinds.has("raise")){
+    const minR=s.raise_min,maxR=s.raise_max;
+    const b=mk("加注到 →","b-raise",()=>send("raise",+slider.value),true);
+    raiseRow.style.display="flex";
+    const slider=document.getElementById("raiseSlider");
+    slider.min=minR;slider.max=maxR;slider.step=Math.max(1,Math.round((maxR-minR)/20))||1;
+    slider.value=minR;document.getElementById("raiseAmt").textContent=minR;
+    slider.oninput=()=>document.getElementById("raiseAmt").textContent=slider.value;
+    // 全下：raise 选项里 is_allin 的那项就是把筹码一次推完（后端 max_to = 本街已投 + 剩余筹码）。
+    // 单给一个按钮 —— 否则拿到好牌想推完，只能把滑杆拖到最右，或者反复点加注陪 AI 磨。
+    const shove=legal.find(a=>a.kind==="raise"&&a.is_allin);
+    if(shove) mk(`全下 ${shove.amount}`,"b-allin",()=>send("raise",shove.amount,true),true);
+  }
+}
+
+async function send(kind,amount,allin){
+  document.getElementById("banner").textContent="AI 行动中…";
+  const r=await fetch(`api/action/${GID}`,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({action:kind,amount:amount||0})});
+  if(!r.ok){
+    const e=await r.json().catch(()=>({detail:"请求失败"}));
+    document.getElementById("banner").textContent="⚠ "+(e.detail||"错误");
+    return;
+  }
+  const s=await r.json();
+  if(s.ai_log) s.ai_log.forEach(a=>log(`${a.name}: ${a.action}`));
+  log(`你: ${labelOf(kind,amount)}${allin?"（全下）":""}`,true);
+  if(s.result){
+    log("→ "+settle(s).line);
+  }
+  render(s);
+}
+function labelOf(kind,amount){
+  return {fold:"弃牌",check:"过牌",call:"跟注"+(amount||""),raise:"加注到"+(amount||"")}[kind]||kind;
+}
+/* 全屏:桌面端想要更大牌桌时用。进入全屏后 100vh 变大,上面的 CSS 会自动把牌桌放大;
+   按钮文案要跟着实际状态走,所以监听 fullscreenchange,而不是只在点击时改。 */
+function toggleFullscreen(){
+  if(document.fullscreenElement){ document.exitFullscreen(); return; }
+  const el=document.documentElement, req=el.requestFullscreen||el.webkitRequestFullscreen;
+  if(!req) return;                          // 浏览器不支持就静默忽略,按钮留在原地
+  const p=req.call(el);
+  if(p&&p.catch) p.catch(()=>{});           // 用户拒绝时别冒未处理的 Promise 异常
+}
+document.addEventListener("fullscreenchange",()=>{
+  const b=document.getElementById("fsBtn");
+  if(b) b.textContent=document.fullscreenElement?"⛶ 退出全屏":"⛶ 全屏";
+});
+</script>
+</body>
+</html>

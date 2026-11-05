@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>川麻训练器 · BetterLife</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3.5' fill='%231d6f42'/%3E%3Ccircle cx='8' cy='8' r='4.2' fill='none' stroke='%23fff' stroke-width='1.4'/%3E%3Ccircle cx='8' cy='8' r='1.3' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#06160f; --bg2:#0a2419;
+  --felt:#15604a; --felt2:#0c4334; --rail:#0a2b20; --rail2:#061a13;
+  --line:rgba(242,193,78,.28); --line2:rgba(255,255,255,.10);
+  --text:#eef6f1; --muted:#8fb5a7; --gold:#f4c95b; --gold-dim:#caa23f;
+  --red:#e8556b; --ok:#46d98a; --bad:#e8556b;
+  --tile:#f8f6ef; --tileedge:#cec8b8;
+  --shadow:0 10px 30px rgba(0,0,0,.45);
+  --r:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:radial-gradient(1200px 700px at 50% -10%,var(--bg2),var(--bg));
+  color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",
+  "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  height:100vh;padding:10px;overflow:hidden;
+}
+a{color:var(--gold)}
+/* 牌桌撑满视口：.app 吃掉 body 剩余高度，第 2 行由 table-wrap / panel 各占一列分掉。
+   滚动交给内部（右侧面板、出牌记录、弃牌区各自 overflow），页面本身不滚。 */
+.app{
+  width:100%;margin:0;display:grid;gap:10px;
+  grid-template-columns:minmax(0,1fr) 400px;
+  grid-template-rows:auto minmax(0,1fr);
+  align-items:stretch;height:calc(100vh - 20px);
+}
+.topbar{
+  grid-column:1/-1;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  background:linear-gradient(180deg,var(--rail),var(--rail2));
+  border:1px solid var(--line2);border-radius:var(--r);padding:10px 16px;
+}
+.topbar h1{font-size:16px;margin:0;letter-spacing:.5px}
+.stat{display:flex;align-items:baseline;gap:6px;color:var(--muted);font-size:13px}
+.stat b{color:var(--gold);font-size:16px;font-variant-numeric:tabular-nums}
+button{
+  font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line2);
+  background:rgba(255,255,255,.06);color:var(--text);padding:8px 15px;
+  transition:filter .15s,transform .06s;
+}
+button:hover:not(:disabled){filter:brightness(1.18)}
+button:active:not(:disabled){transform:translateY(1px)}
+button:disabled{opacity:.34;cursor:not-allowed}
+.b-gold{background:linear-gradient(180deg,var(--gold),var(--gold-dim));color:#3a2a00;font-weight:700;border-color:transparent}
+.b-ghost{background:transparent}
+.b-hu{background:linear-gradient(180deg,#ff7a5c,#e0432a);color:#fff;font-weight:800;border-color:transparent}
+.b-pong{background:linear-gradient(180deg,#5cc8ff,#2b86d6);color:#04263c;font-weight:800;border-color:transparent}
+.b-kong{background:linear-gradient(180deg,#a86bff,#7a3fd6);color:#fff;font-weight:800;border-color:transparent}
+
+/* ---------- 大厅 ---------- */
+/* 首页跨满两列：`.app` 是「主体 + 400px 右侧面板」的两列栅格，但首页阶段面板还没出现
+   （display:none），只占左列的话右边会**空出 410px**、内容中心偏到 x=595（视口中心 800）。
+   跨列占满后内容才真正水平居中。开局后首页隐藏、面板出现，栅格不受影响。 */
+.lobby{
+  grid-column:1/-1;
+  background:linear-gradient(180deg,var(--felt),var(--felt2));
+  border:1px solid var(--line);border-radius:22px;padding:44px 30px;height:100%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;text-align:center;
+}
+.lobby h2{margin:0;font-size:24px}
+.lobby p{margin:0;color:var(--muted);max-width:560px;line-height:1.7}
+.rulecard{
+  background:rgba(0,0,0,.25);border:1px solid var(--line2);border-radius:12px;
+  padding:14px 18px;text-align:left;max-width:620px;font-size:13px;color:#cfe6dc;
+}
+.rulecard b{color:var(--gold)}
+
+/* ---------- 牌桌 ---------- */
+.table-wrap{
+  position:relative;height:100%;min-height:0;
+  background:
+    radial-gradient(70% 60% at 50% 45%,#1a755a 0%,var(--felt) 45%,var(--felt2) 100%);
+  border:10px solid var(--rail);border-radius:24px;padding:12px;
+  display:grid;gap:10px;grid-template-columns:210px minmax(0,1fr) 210px;
+  grid-template-rows:auto minmax(0,1fr) auto;
+  box-shadow:var(--shadow);
+}
+.seat{
+  background:rgba(0,0,0,.24);border:1px solid var(--line2);border-radius:12px;
+  padding:8px 10px;min-width:0;
+}
+.seat.turn{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+.seat.hu{background:rgba(70,217,138,.16);border-color:var(--ok)}
+.seat .nm{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:6px;flex-wrap:wrap}
+.seat .nm b{color:var(--text);font-size:13px}
+.tag{font-size:11px;padding:1px 6px;border-radius:999px;background:rgba(255,255,255,.12);color:var(--muted);white-space:nowrap}
+.tag.void{background:rgba(232,85,107,.22);color:#ffc8d0}
+.tag.hu{background:rgba(70,217,138,.26);color:#c9ffe3}
+.tag.you{background:rgba(242,193,78,.24);color:#ffe9b0}
+.seat.you{background:rgba(242,193,78,.10);border-color:var(--line)}
+#seatTop{grid-column:2;grid-row:1;justify-self:center;max-width:100%}
+#seatLeft{grid-column:1;grid-row:2;align-self:center}
+#seatRight{grid-column:3;grid-row:2;align-self:center}
+#seatMe{grid-column:2;grid-row:3}
+
+/* 牌桌中心：四家的弃牌围成一圈，中间放提示与按钮 */
+.center{
+  grid-column:2;grid-row:2;min-width:0;min-height:0;
+  display:grid;gap:6px;width:100%;height:100%;padding:8px;
+  background:rgba(0,0,0,.16);border:1px solid var(--line2);border-radius:18px;
+  grid-template-columns:minmax(0,1fr) minmax(112px,auto) minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-areas:
+    "dtop  dtop  dtop"
+    "dleft mid   dright"
+    "dbot  dbot  dbot";
+  align-items:center;justify-items:center;
+}
+.d-top{grid-area:dtop}.d-bot{grid-area:dbot}
+.d-left{grid-area:dleft}.d-right{grid-area:dright}
+.mid{grid-area:mid;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}
+.discard-area{
+  display:flex;flex-wrap:wrap;gap:3px;justify-content:center;align-content:center;
+  max-width:100%;max-height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;
+}
+.d-top,.d-bot{width:min(100%,470px)}
+.d-left,.d-right{width:min(100%,124px)}
+.d-top .tile,.d-bot .tile{opacity:.97}
+.d-left .tile,.d-right .tile{opacity:.94}
+.banner{font-size:14px;color:var(--gold);min-height:20px;text-align:center;line-height:1.4}
+.wall{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+.wall b{color:var(--text);font-size:17px;font-variant-numeric:tabular-nums}
+
+/* ---------- 麻将牌：牌面是内联 SVG（无外部图片、无字体依赖） ---------- */
+.tile{
+  width:clamp(28px,2.6vw,40px);height:clamp(38px,3.6vw,56px);
+  border-radius:5px;background:var(--tile);
+  flex:0 0 auto;user-select:none;padding:1px;
+  border-bottom:3px solid var(--tileedge);box-shadow:0 1px 2px rgba(0,0,0,.32);
+}
+.tile svg{width:100%;height:100%;display:block}
+.tile.sm{width:clamp(22px,2vw,30px);height:clamp(30px,2.8vw,42px);border-radius:4px;padding:0;
+  border-bottom-width:2px}
+.tile.back{background:#2f7d63;border-bottom-color:#12402f}
+.tile.play{cursor:pointer;transition:transform .1s,box-shadow .1s}
+.tile.play:hover{transform:translateY(-5px);box-shadow:0 6px 10px rgba(0,0,0,.4)}
+.tile.best{outline:2px solid var(--gold);outline-offset:1px}
+.tile.voidt{opacity:.5}
+.tile.last{outline:1.5px solid rgba(244,201,91,.75);outline-offset:1px}
+.meldgroup{display:flex;gap:6px;margin-bottom:5px;flex-wrap:wrap}
+.meldgroup .lab{font-size:10px;color:var(--muted);align-self:center;margin-right:2px}
+.handrow{display:flex;flex-wrap:wrap;gap:4px;align-items:flex-end}
+.handrow.backs{gap:2px}
+.handrow.backs .tile{opacity:.9}
+
+/* ---------- 右侧面板 ---------- */
+.panel{
+  background:linear-gradient(180deg,var(--rail),var(--rail2));
+  border:1px solid var(--line2);border-radius:var(--r);padding:14px;
+  display:flex;flex-direction:column;gap:12px;height:100%;overflow-y:auto;
+}
+.card{background:rgba(255,255,255,.04);border:1px solid var(--line2);border-radius:12px;padding:12px}
+.card h3{margin:0 0 8px;font-size:13px;color:var(--muted);font-weight:600;letter-spacing:.4px}
+.big{display:flex;align-items:baseline;gap:8px}
+.big b{font-size:32px;color:var(--gold);font-variant-numeric:tabular-nums;line-height:1}
+.big span{color:var(--muted);font-size:12px}
+.tenpai{color:var(--ok)!important}
+.hint{font-size:12px;color:var(--muted);line-height:1.6}
+.ukeire{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.ukeire .u{display:flex;align-items:center;gap:3px;background:rgba(255,255,255,.07);
+  border:1px solid var(--line2);border-radius:8px;padding:3px 6px;font-size:12px}
+.ukeire .u i{font-style:normal;color:var(--gold);font-weight:700}
+table.rank{width:100%;border-collapse:collapse;font-size:12px}
+table.rank th,table.rank td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line2)}
+table.rank th{color:var(--muted);font-weight:600}
+table.rank tr.top td{color:var(--gold);font-weight:700}
+table.rank td.num{text-align:right;font-variant-numeric:tabular-nums}
+.log{max-height:220px;overflow-y:auto;font-size:12px;line-height:1.75}
+.log div{color:var(--muted)}
+.log div.me{color:#ffe9b0}
+.log div.hu{color:var(--ok);font-weight:700}
+.log div.kong{color:#c9a8ff}
+.log div.pong{color:#9fd8ff}
+
+/* ---------- 弹窗 ---------- */
+.modal{position:fixed;inset:0;background:rgba(3,10,7,.72);display:none;
+  align-items:center;justify-content:center;z-index:50;padding:20px;backdrop-filter:blur(3px)}
+.modal.show{display:flex}
+.modal .box{
+  background:linear-gradient(180deg,var(--rail),var(--rail2));border:1px solid var(--line);
+  border-radius:18px;padding:22px 26px;max-width:560px;width:100%;box-shadow:var(--shadow);
+}
+.modal h3{margin:0 0 6px;font-size:17px}
+.modal p{margin:0 0 16px;color:var(--muted);font-size:13px;line-height:1.7}
+.suitpick{display:flex;gap:10px;flex-wrap:wrap}
+.suitbtn{
+  flex:1;min-width:120px;background:rgba(255,255,255,.05);border:1px solid var(--line2);
+  border-radius:14px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;
+}
+.suitbtn:hover{filter:brightness(1.2)}
+.suitpick .tile{width:40px;height:56px}
+.suitbtn .cnt{font-size:12px;color:var(--muted)}
+.suitbtn strong{font-size:17px}
+.result{display:flex;flex-direction:column;gap:8px}
+.result .row{display:flex;align-items:center;gap:8px;font-size:13px}
+.result .row b{color:var(--gold);margin-left:auto;font-variant-numeric:tabular-nums}
+.sp{flex:1}
+
+@media (max-width:1150px){
+  /* 单列时不再强撑一屏：改回整页滚动，否则右侧面板会被压扁到没法看 */
+  body{height:auto;min-height:100vh;overflow:auto}
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto;
+    height:auto;width:100%}
+  .lobby{height:auto}
+  .table-wrap{height:auto;min-height:620px}
+  .panel{height:auto;overflow-y:visible}
+}
+@media (max-width:820px){
+  body{padding:8px}
+  .table-wrap{grid-template-columns:1fr;grid-template-rows:auto auto auto auto auto;
+    border-width:6px;gap:8px;min-height:0;padding:8px}
+  #seatTop,#seatLeft,#seatRight,#seatMe,.center{grid-column:1;grid-row:auto}
+  #seatLeft,#seatRight{align-self:auto}
+  .center{order:-1;height:400px;min-height:400px}
+  .center{grid-template-columns:minmax(0,1fr) 96px minmax(0,1fr)}
+  .tile{width:26px;height:36px}
+  .tile.sm{width:22px;height:30px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <h1>🀄 川麻训练器</h1>
+    <span class="stat">牌墙 <b id="wallLeft">—</b></span>
+    <span class="stat">我的缺门 <b id="myVoid">—</b></span>
+    <span class="sp"></span>
+    <button class="b-gold" onclick="newGame()">重新开局</button>
+  </div>
+
+  <div id="lobby" class="lobby">
+    <h2>四川麻将 · 血战到底</h2>
+    <p>4 人一局。万/条/筒 共 108 张，<b>定缺</b>后先打完缺门的牌，不能吃，只能碰、杠、胡。
+       有人胡牌后其余家继续打，直到只剩一家或牌墙摸完。</p>
+    <div class="rulecard">
+      <b>决策辅助</b>会实时给出<b>向听数</b>（离听牌还差几次换牌）和<b>有效进张</b>
+      （哪些牌能推进向听、牌墙里还剩几张），并告诉你<b>打哪张最优</b>。<br>
+      进张口径：牌墙剩余 = 4 − 河里明牌 − 亮出的面子 − 自己手里的；别人手里的不扣。
+    </div>
+    <button class="b-gold" style="font-size:16px;padding:13px 30px" onclick="newGame()">开始牌局</button>
+  </div>
+
+  <div id="tableWrap" class="table-wrap" style="display:none">
+    <div class="seat" id="seatTop"></div>
+    <div class="seat" id="seatLeft"></div>
+    <div class="seat" id="seatRight"></div>
+    <div class="seat you" id="seatMe"></div>
+    <div class="center">
+      <div class="discard-area d-top" id="discTop"></div>
+      <div class="discard-area d-left" id="discLeft"></div>
+      <div class="mid">
+        <div class="banner" id="banner">发牌中…</div>
+        <div class="wall">牌墙剩余 <b id="wallBig">—</b> 张</div>
+        <div class="acts" id="acts"></div>
+      </div>
+      <div class="discard-area d-right" id="discRight"></div>
+      <div class="discard-area d-bot" id="discBot"></div>
+    </div>
+  </div>
+
+  <div id="panel" class="panel" style="display:none">
+    <div class="card">
+      <h3>向听数</h3>
+      <div class="big"><b id="shanten">—</b><span id="shantenHint">—</span></div>
+      <div class="hint" id="voidHint"></div>
+    </div>
+    <div class="card">
+      <h3>有效进张 <span class="hint" id="ukeireTotal"></span></h3>
+      <div class="ukeire" id="ukeire"></div>
+    </div>
+    <div class="card">
+      <h3>推荐打哪张</h3>
+      <div class="hint" id="bestDiscard">—</div>
+    </div>
+    <div class="card">
+      <h3>每张可打牌的对比</h3>
+      <table class="rank"><thead><tr><th>打</th><th class="num">向听</th><th class="num">进张</th></tr></thead>
+      <tbody id="rankBody"></tbody></table>
+    </div>
+    <div class="card">
+      <h3>出牌记录</h3>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="voidModal">
+  <div class="box">
+    <h3>定缺</h3>
+    <p>选一门作为「缺」。缺门的牌必须先打完，胡牌时手里不能有缺门牌 ——
+       选手里张数最少的那门通常最划算。</p>
+    <div class="suitpick" id="suitPick"></div>
+  </div>
+</div>
+
+<div class="modal" id="overModal">
+  <div class="box">
+    <h3 id="overTitle">本局结束</h3>
+    <p id="overReason"></p>
+    <div class="result" id="overResult"></div>
+    <div style="margin-top:18px;display:flex;gap:10px">
+      <button class="b-gold" onclick="newGame()">再来一局</button>
+      <button class="b-ghost" onclick="document.getElementById('overModal').classList.remove('show')">看看牌桌</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "api";   // 页面挂在 /poker/ 或 /game/mahjong/ 下，全部用相对路径
+const SUIT_CN = {m:"万", s:"条", p:"筒"};
+const CN_NUM = ["","一","二","三","四","五","六","七","八","九"];
+// 牌面读数：`4m` → `四万`。接口传的是紧凑编码，**显示给用户的一律走这个**，
+// 「碰 4m」这种内部编码没人看得懂。
+const tileCN = code => CN_NUM[+code[0]] + SUIT_CN[code[1]];
+let GID = null, ST = null;
+
+/* ==========================================================================
+   牌面素材：全部内联 SVG，不引外部图片、筒/条不依赖字体。
+   万 用 CJK 字形（页面本来就渲染中文，字体必然存在）。
+   ========================================================================== */
+const PIPS = {
+  1:[[.50,.50]],
+  2:[[.50,.26],[.50,.74]],
+  3:[[.28,.22],[.50,.50],[.72,.78]],
+  4:[[.30,.26],[.70,.26],[.30,.74],[.70,.74]],
+  5:[[.30,.24],[.70,.24],[.50,.50],[.30,.76],[.70,.76]],
+  6:[[.30,.20],[.70,.20],[.30,.50],[.70,.50],[.30,.80],[.70,.80]],
+  7:[[.25,.18],[.50,.18],[.75,.18],[.30,.50],[.70,.50],[.30,.82],[.70,.82]],
+  8:[[.30,.14],[.70,.14],[.30,.38],[.70,.38],[.30,.62],[.70,.62],[.30,.86],[.70,.86]],
+  9:[[.25,.16],[.50,.16],[.75,.16],[.25,.50],[.50,.50],[.75,.50],[.25,.84],[.50,.84],[.75,.84]]
+};
+const RAD = {1:9, 2:8, 3:7, 4:7, 5:6.5, 6:6, 7:5.5, 8:5, 9:4.7};
+const DOT_COLORS = ["#1d4f9e", "#c0392b", "#1d6f42"];
+const X = f => +(f * 40).toFixed(2), Y = f => +(f * 56).toFixed(2);
+const n2 = v => (+v).toFixed(2);
+
+// 筒：同心圆点（蓝/红/绿循环），像真牌的「饼」
+function dot(x, y, r, i){
+  const c = DOT_COLORS[i % 3];
+  return `<circle cx="${x}" cy="${y}" r="${n2(r)}" fill="${c}"/>` +
+         `<circle cx="${x}" cy="${y}" r="${n2(r*.56)}" fill="#f8f6ef"/>` +
+         `<circle cx="${x}" cy="${y}" r="${n2(r*.26)}" fill="${c}"/>`;
+}
+
+// 条：竹节（绿杆 + 红头 + 中间一道白箍），像真牌的「索」
+function stick(x, y, r, i){
+  const h = r * 2.75, w = r * .95;
+  const x0 = n2(x - w / 2), y0 = n2(y - h / 2);
+  return `<g>` +
+    `<rect x="${x0}" y="${y0}" width="${n2(w)}" height="${n2(h)}" rx="${n2(w/2)}" fill="#1d6f42"/>` +
+    `<rect x="${x0}" y="${y0}" width="${n2(w)}" height="${n2(h*.2)}" rx="${n2(w/2)}" fill="#c0392b"/>` +
+    `<rect x="${x0}" y="${n2(y+h/2-h*.2)}" width="${n2(w)}" height="${n2(h*.2)}" rx="${n2(w/2)}" fill="#c0392b"/>` +
+    `<rect x="${x0}" y="${n2(y-h*.07)}" width="${n2(w)}" height="${n2(h*.14)}" fill="#f8f6ef" opacity=".5"/>` +
+  `</g>`;
+}
+
+// 一条：真牌是一条鸟，不是一根竹节
+function bird(){
+  return `<g>` +
+    `<path d="M20 40 q-7.5 8 -3.5 14.5 3.5-3 5.5-7.5 z" fill="#c0392b"/>` +
+    `<path d="M20 40 q7.5 8 3.5 14.5 -3.5-3 -5.5-7.5 z" fill="#c0392b"/>` +
+    `<ellipse cx="20" cy="32" rx="7.6" ry="10" fill="#1d6f42"/>` +
+    `<path d="M20 24 q-4.2 4.5 0 10.5 4.2-6 0-10.5z" fill="#f8f6ef" opacity=".45"/>` +
+    `<ellipse cx="12.6" cy="31" rx="4.4" ry="3" fill="#1d6f42" transform="rotate(-22 12.6 31)"/>` +
+    `<circle cx="20" cy="17" r="5.3" fill="#1d6f42"/>` +
+    `<path d="M25.2 15.4 l6.6 2.1 -6.6 2.2 z" fill="#c0392b"/>` +
+    `<circle cx="18.1" cy="16" r="1.35" fill="#1a1c20"/>` +
+  `</g>`;
+}
+
+function faceSVG(rank, suit){
+  let body = "";
+  if (suit === "m"){
+    body = `<text x="20" y="25.5" text-anchor="middle" font-size="23" font-weight="700"
+              fill="#1a1c20" font-family="Songti SC,SimSun,serif">${CN_NUM[rank]}</text>` +
+           `<text x="20" y="50" text-anchor="middle" font-size="21" font-weight="700"
+              fill="#c0392b" font-family="Songti SC,SimSun,serif">萬</text>`;
+  } else {
+    const pts = PIPS[rank], r = RAD[rank];
+    body = (suit === "s" && rank === 1)
+      ? bird()
+      : pts.map(([fx, fy], i) => (suit === "p" ? dot : stick)(X(fx), Y(fy), r, i)).join("");
+  }
+  return `<svg viewBox="0 0 40 56" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
+}
+
+// 牌背：真牌背面是绿色带纹路
+function backSVG(){
+  return `<svg viewBox="0 0 40 56" xmlns="http://www.w3.org/2000/svg">` +
+    `<rect x="1.5" y="1.5" width="37" height="53" rx="4" fill="#2f7d63"/>` +
+    `<path d="M4 15h32M4 28h32M4 41h32" stroke="#1c5a45" stroke-width="2.6"/>` +
+    `<circle cx="20" cy="28" r="7.6" fill="none" stroke="#1c5a45" stroke-width="2.6"/>` +
+    `<circle cx="20" cy="28" r="2.4" fill="#1c5a45"/>` +
+  `</svg>`;
+}
+
+const _svgCache = {};
+function tileEl(code, cls, faceDown){
+  const e = document.createElement("div");
+  const rank = +code[0], suit = code[1];
+  e.className = "tile " + (faceDown ? "back" : suit) + (cls ? " " + cls : "");
+  const key = faceDown ? "back" : rank + suit;
+  if (!_svgCache[key]) _svgCache[key] = faceDown ? backSVG() : faceSVG(rank, suit);
+  e.innerHTML = _svgCache[key];
+  e.title = faceDown ? "未亮牌" : tileCN(code);
+  return e;
+}
+
+/* ==========================================================================
+   接口
+   ========================================================================== */
+async function call(path, body){
+  const opt = body ? {method:"POST", headers:{"Content-Type":"application/json"},
+                      body:JSON.stringify(body)} : {};
+  const r = await fetch(API + path, opt);
+  const j = await r.json().catch(()=>({error:"响应不是 JSON"}));
+  if (!r.ok || j.ok === false){
+    banner("⚠ " + (j.error || j.detail || "请求失败"));
+    return null;
+  }
+  return j;
+}
+function banner(t){ document.getElementById("banner").textContent = t; }
+
+async function newGame(){
+  document.getElementById("overModal").classList.remove("show");
+  banner("发牌中…");
+  const j = await call("/new", {});
+  if (!j) return;
+  GID = j.game_id;
+  document.getElementById("lobby").style.display = "none";
+  document.getElementById("tableWrap").style.display = "grid";
+  document.getElementById("panel").style.display = "flex";
+  render(j.state);
+}
+
+async function act(action, tile, suit){
+  if (!GID) return;
+  banner("AI 思考中…");
+  const j = await call("/action/" + GID, {action, tile: tile || null, suit: suit || null});
+  if (!j) return;
+  render(j.state);
+}
+
+/* ==========================================================================
+   渲染
+   ========================================================================== */
+const SEAT_CN = ["我", "下家", "对家", "上家"];
+
+function renderSeat(el, p, isMe){
+  el.innerHTML = "";
+  el.classList.toggle("turn", ST.turn === p.idx && !ST.result);
+  el.classList.toggle("hu", !!p.hu);
+
+  const nm = document.createElement("div");
+  nm.className = "nm";
+  nm.innerHTML = `<b>${SEAT_CN[p.idx]}</b>`
+    + (isMe ? '<span class="tag you">你</span>' : "")
+    + (p.void ? `<span class="tag void">缺${SUIT_CN[p.void]}</span>` : "")
+    + (p.hu ? '<span class="tag hu">已胡</span>' : "")
+    + `<span class="tag">${p.hand_count} 张</span>`
+    + `<span class="sp"></span><span class="tag">${p.score >= 0 ? "+" : ""}${p.score}</span>`;
+  el.appendChild(nm);
+
+  if (p.melds && p.melds.length){
+    const g = document.createElement("div");
+    g.className = "meldgroup";
+    p.melds.forEach(m=>{
+      const wrap = document.createElement("div");
+      wrap.className = "handrow";
+      const lab = document.createElement("span");
+      lab.className = "lab";
+      lab.textContent = {pong:"碰", kong:"杠", ankong:"暗杠", bukong:"补杠"}[m.kind] || m.kind;
+      wrap.appendChild(lab);
+      const n = m.kind === "pong" ? 3 : 4;
+      const hidden = m.kind === "ankong" && !isMe;   // 暗杠别人看不到牌面
+      for (let i = 0; i < n; i++) wrap.appendChild(tileEl(m.tile, "sm", hidden));
+      g.appendChild(wrap);
+    });
+    el.appendChild(g);
+  }
+
+  const row = document.createElement("div");
+  row.className = "handrow" + (isMe ? "" : " backs");
+  if (isMe){
+    const best = new Set((ST.advice && ST.advice.best_discards) || []);
+    const canPlay = new Set((ST.legal || []).filter(a=>a.kind === "discard").map(a=>a.tile));
+    (p.hand || []).forEach(code=>{
+      const cls = ["play"];
+      if (best.has(code)) cls.push("best");
+      if (p.void && code[1] === p.void) cls.push("voidt");
+      const e = tileEl(code, cls.join(" "));
+      if (canPlay.has(code)) e.onclick = ()=>act("discard", code);
+      row.appendChild(e);
+    });
+  } else {
+    // 别人只给 hand_count，有几张就摆几张牌背（真牌桌上也是这么看的）
+    for (let i = 0; i < p.hand_count; i++) row.appendChild(tileEl("1m", "sm", true));
+  }
+  el.appendChild(row);
+}
+
+// 四家弃牌围在牌桌中心：对家在上、我在下、下家在右、上家在左
+const DISCARD_SLOTS = [["discBot", 0], ["discRight", 1], ["discTop", 2], ["discLeft", 3]];
+function renderDiscards(s){
+  DISCARD_SLOTS.forEach(([id, pi])=>{
+    const box = document.getElementById(id);
+    box.innerHTML = "";
+    const ds = s.players[pi].discards;
+    ds.forEach((c, i)=>{
+      box.appendChild(tileEl(c, "sm" + (i === ds.length - 1 ? " last" : "")));
+    });
+  });
+}
+
+function render(s){
+  ST = s;
+  document.getElementById("wallLeft").textContent = s.wall_left;
+  document.getElementById("wallBig").textContent = s.wall_left;
+  document.getElementById("myVoid").textContent = s.players[s.me].void
+    ? SUIT_CN[s.players[s.me].void] : "待定";
+
+  renderSeat(document.getElementById("seatTop"), s.players[2], false);
+  renderSeat(document.getElementById("seatLeft"), s.players[3], false);
+  renderSeat(document.getElementById("seatRight"), s.players[1], false);
+  renderSeat(document.getElementById("seatMe"), s.players[0], true);
+  renderDiscards(s);
+
+  const need = s.need_void;
+  document.getElementById("voidModal").classList.toggle("show", need);
+  if (need) renderSuitPick(s);
+
+  const acts = document.getElementById("acts");
+  acts.innerHTML = "";
+  if (!s.result && s.my_turn){
+    const kinds = {};
+    (s.legal || []).forEach(a=>{ (kinds[a.kind] = kinds[a.kind] || []).push(a); });
+    const mk = (label, cls, fn)=>{
+      const b = document.createElement("button");
+      b.className = cls; b.textContent = label; b.onclick = fn; acts.appendChild(b);
+    };
+    if (kinds.hu) mk("胡", "b-hu", ()=>act("hu"));
+    (kinds.kong || []).forEach(a=>mk(`杠 ${tileCN(a.tile)}`, "b-kong", ()=>act("kong", a.tile)));
+    (kinds.pong || []).forEach(a=>mk(`碰 ${tileCN(a.tile)}`, "b-pong", ()=>act("pong", a.tile)));
+    if (kinds.pass) mk("过", "b-ghost", ()=>act("pass"));
+    if (kinds.discard) banner("轮到你 · 点手牌打出（金框是推荐）");
+    else if (kinds.pong || kinds.kong || kinds.hu) banner("轮到你 · 可以碰/杠/胡");
+  } else if (!s.result){
+    const w = s.waiting;
+    banner(w && w[0] === "react" ? "等待其他家反应…" : "AI 行动中…");
+  } else {
+    banner(s.result.reason);
+  }
+
+  renderAdvice(s.advice);
+  renderLog(s.log);
+  if (s.result) showOver(s);
+}
+
+function renderSuitPick(s){
+  const hand = s.players[s.me].hand || [];
+  const cnt = {m:0, s:0, p:0};
+  hand.forEach(c=>cnt[c[1]]++);
+  const box = document.getElementById("suitPick");
+  box.innerHTML = "";
+  ["m", "s", "p"].forEach(suit=>{
+    const b = document.createElement("button");
+    b.className = "suitbtn";
+    b.appendChild(tileEl("1" + suit, "", false));   // 用一张牌当图标
+    const st = document.createElement("strong");
+    st.textContent = SUIT_CN[suit];
+    const c = document.createElement("span");
+    c.className = "cnt";
+    c.textContent = `手里 ${cnt[suit]} 张`;
+    b.appendChild(st); b.appendChild(c);
+    b.onclick = ()=>act("void", null, suit);
+    box.appendChild(b);
+  });
+}
+
+function renderAdvice(adv){
+  if (!adv) return;
+  const st = adv.shanten;
+  const el = document.getElementById("shanten");
+  el.textContent = st < 0 ? "胡！" : st;
+  el.className = st === 0 || st < 0 ? "tenpai" : "";
+  document.getElementById("shantenHint").textContent =
+    st < 0 ? "已经胡牌" : (st === 0 ? "已听牌" : `还差 ${st} 次换牌听牌`);
+  const mine = ST.players[ST.me];
+  document.getElementById("voidHint").textContent = mine.void
+    ? `定缺：${SUIT_CN[mine.void]}（缺门牌必须先打完，不参与进张）`
+    : "还没定缺";
+
+  document.getElementById("ukeireTotal").textContent =
+    adv.ukeire ? `共 ${adv.ukeire} 张` : "（已听牌或已胡）";
+  const u = document.getElementById("ukeire");
+  u.innerHTML = "";
+  (adv.ukeire_detail || []).forEach(d=>{
+    const w = document.createElement("div");
+    w.className = "u";
+    w.appendChild(tileEl(d.tile, "sm"));
+    const i = document.createElement("i");
+    i.textContent = "×" + d.count;
+    w.appendChild(i);
+    u.appendChild(w);
+  });
+  if (!(adv.ukeire_detail || []).length){
+    u.innerHTML = '<span class="hint">没有能推进向听的牌了。</span>';
+  }
+
+  const best = adv.best_discards || [];
+  document.getElementById("bestDiscard").innerHTML = best.length
+    ? "推荐打：" + best.map(t=>`<b style="color:var(--gold)">${tileCN(t)}</b>`).join(" 或 ")
+      + `<br><span style="color:var(--muted)">并列最优（同向听、同进张），打哪张都一样。</span>`
+    : "—";
+
+  const body = document.getElementById("rankBody");
+  body.innerHTML = "";
+  const top = best.length ? best[0] : null;
+  (adv.discards || []).slice(0, 18).forEach(r=>{
+    const tr = document.createElement("tr");
+    if (top && r.discard === top) tr.className = "top";
+    tr.innerHTML = `<td>${tileCN(r.discard)}</td>`
+      + `<td class="num">${r.shanten < 0 ? "胡" : r.shanten}</td>`
+      + `<td class="num">${r.ukeire}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+function renderLog(log){
+  const el = document.getElementById("log");
+  el.innerHTML = "";
+  (log || []).slice(-30).forEach(e=>{
+    const d = document.createElement("div");
+    d.className = (e.player === 0 ? "me " : "") + (e.kind || "");
+    const who = e.player < 0 ? "" : (e.player === 0 ? "我" : SEAT_CN[e.player]) + " ";
+    d.textContent = who + e.action;
+    el.appendChild(d);
+  });
+  el.scrollTop = el.scrollHeight;
+}
+
+function showOver(s){
+  const r = s.result;
+  document.getElementById("overReason").textContent = r.reason;
+  const box = document.getElementById("overResult");
+  box.innerHTML = "";
+  s.players.forEach(p=>{
+    const row = document.createElement("div");
+    row.className = "row";
+    const hu = p.hu_info ? `（${p.hu_info.how} · ${p.hu_info.types.join("/")} ×${p.hu_info.fan}）` : "";
+    row.innerHTML = `<span>${SEAT_CN[p.idx]}`
+      + `${p.hu ? " <b style='color:var(--ok)'>胡</b>" : ""}${hu}</span>`
+      + `<b style="color:${p.score >= 0 ? 'var(--ok)' : 'var(--bad)'}">${p.score >= 0 ? "+" : ""}${p.score}</b>`;
+    box.appendChild(row);
+  });
+  document.getElementById("overModal").classList.add("show");
+}
+
+document.addEventListener("keydown", e=>{
+  if (e.key === "Escape") document.getElementById("overModal").classList.remove("show");
+});
+</script>
+</body>
+</html>

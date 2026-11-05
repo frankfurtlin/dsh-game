@@ -1,0 +1,43 @@
+{
+  "name": "dsh-game",
+  "version": "0.1.0",
+  "private": true,
+  "description": "「德州扑克 + 麻将」DSH 插件：侧栏「更多」菜单两行入口 + 双 tab 主面板内嵌本地 FastAPI 训练器（/game 反代到 127.0.0.1:8817，仅 DSH 登录用户可访问）。",
+  "type": "module",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
+    }
+  },
+  "files": [
+    "lib",
+    "client.js",
+    "cordis.patch.yml",
+    "server/app",
+    "verification",
+    "README.md"
+  ],
+  "scripts": {
+    "check": "node --check lib/index.js && node --check client.js && node --check verification/verify-app.mjs && node --check verification/verify-host.mjs && node --check verification/verify-client.mjs",
+    "verify": "node verification/verify-app.mjs && node verification/verify-host.mjs && node verification/verify-client.mjs"
+  }
+}
