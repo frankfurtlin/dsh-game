@@ -4,11 +4,8 @@
 
 **在 DSH 侧栏开两个本地训练器：德州扑克（含胜率、EV 与操作建议）和四川麻将（含向听、进张与出牌推荐），对局只在后端内存里。**
 
-Two practice tables inside DSH — heads-up Texas Hold'em and Sichuan mahjong with decision hints; games live in memory only.
-
 [![Version](https://img.shields.io/badge/version-0.1.0-blue)](package.json)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Platform](https://img.shields.io/badge/DSH-DeepSeek%20Harness-5b5ef7)](https://github.com/frankfurtlin/dsh-pocket)
 
 [English](README.md) · **简体中文**
 
