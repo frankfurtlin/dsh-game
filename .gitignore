@@ -8,3 +8,7 @@ server/data/
 
 # 验收产物（脚本可重新生成）
 verification/shots/
+
+# README 用的界面截图要在 GitHub 上能显示
+!docs/screenshots/
+!docs/screenshots/**
