@@ -5,12 +5,11 @@
  * 用 Node 模拟浏览器里的 `window.__ModuleLoader__` 与宿主 mock（slots / layout），
  * 把 client.js 真实跑一遍，再用 react-dom/server 渲染注册进去的组件，证明：
  *   1. `apply` 在 main 座位注册 key='dsh-game' 的面板，并在
- *      `sidebar.panellist.actions` 注册两行（id / order / name 都对）；
+ *      `sidebar.panellist.actions` 注册唯一一行「游戏」（id / order / 文案都对）；
  *   2. 面板默认 tab=扑克，工具条有两个 tab、返回/刷新/新窗口、iframe 指向
  *      `/game/poker/`；
- *   3. 点「麻将」菜单行：先 onDismiss 关菜单，再 layout.selectPanel('dsh-game')，
- *      之后面板渲染出的 tab 变成麻将、iframe 指向 `/game/mahjong/`；
- *   4. 点「德州扑克」菜单行同理切回扑克。
+ *   3. 点「游戏」菜单行：先 onDismiss 关菜单，再 layout.selectPanel('dsh-game')；
+ *      扑克 / 麻将改由面板内工具条切 tab（注入的 open(kind) 仍支持指定 tab）。
  *
  * 为什么不用真 DSH：本机约定禁止我安装插件 / 改 /root/.dsh。真实 DSH 里的最终
  * 点击验收由 Lead 安装后执行；本脚本覆盖注册形状与组件行为（宿主 API 是 mock）。
@@ -24,12 +23,35 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(import.meta.url)
 
-/** react 18 与 react-dom/server 在 DSH profile 的 pnpm 仓库里（宿主版本）。 */
-const REACT_DIR = '/root/.dsh/profiles/web/node_modules/.pnpm/react@18.3.1/node_modules/react'
-const REACT_DOM_SERVER =
-  '/root/.dsh/profiles/web/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/server.js'
-const React = require(join(REACT_DIR, 'index.js'))
-const ReactDOMServer = require(REACT_DOM_SERVER)
+/**
+ * react 18 与 react-dom/server：优先 profile 的 node_modules（宿主同版本），
+ * 找不到就退回本机已有的 react 18 安装；都找不到时给明确提示而不是 MODULE_NOT_FOUND。
+ * 覆盖入口：DSH_GAME_REACT_DIR=<含 react 的 node_modules 目录>。
+ */
+function loadReact() {
+  const candidates = [
+    process.env.DSH_GAME_REACT_DIR,
+    '/root/.dsh/profiles/web/node_modules',
+    '/root/workspace/plugins/dsh-creative-studio/threeui-src/node_modules',
+  ].filter(Boolean)
+  for (const dir of candidates) {
+    try {
+      return {
+        React: require(require.resolve('react', { paths: [dir] })),
+        ReactDOMServer: require(require.resolve('react-dom/server', { paths: [dir] })),
+        from: dir,
+      }
+    } catch {
+      /* 试下一个 */
+    }
+  }
+  throw new Error(
+    `找不到 react / react-dom/server。试过：${candidates.join(' / ')}；` +
+      '设置 DSH_GAME_REACT_DIR 指向一个含 react 18 的 node_modules 目录。',
+  )
+}
+
+const { React, ReactDOMServer } = loadReact()
 
 const results = []
 function check(name, ok, detail) {
@@ -109,16 +131,12 @@ function main() {
     const mains = byName('main')
     const actions = byName('sidebar.panellist.actions')
     check('main 座位注册 1 个面板（key=dsh-game）', mains.length === 1 && mains[0].definition.key === 'dsh-game', `count=${mains.length}`)
-    check('「更多」菜单注册两行（poker / mahjong）', actions.length === 2, `count=${actions.length}`)
+    check('「更多」菜单只注册一行（游戏）', actions.length === 1, `count=${actions.length}`)
     const ids = actions.map((item) => item.definition.id)
     const orders = actions.map((item) => item.definition.order)
     check(
-      '两行 id / order 正确（不注册 sidebar.panellist 常驻行）',
-      ids.includes('dsh-game-more-poker') &&
-        ids.includes('dsh-game-more-mahjong') &&
-        orders.includes(41) &&
-        orders.includes(42) &&
-        byName('sidebar.panellist').length === 0,
+      '菜单行 id / order 正确（不注册 sidebar.panellist 常驻行）',
+      ids[0] === 'dsh-game-more' && orders[0] === 41 && byName('sidebar.panellist').length === 0,
       `ids=${ids.join(',')} orders=${orders.join(',')}`,
     )
 
@@ -130,29 +148,25 @@ function main() {
     check('iframe 指向 /game/poker/', panelHtml.includes('src="http://127.0.0.1:3080/game/poker/"'), 'src 见 html')
     check('面板渲染成功', panelHtml.includes('data-dsh-game-panel'))
 
-    // 菜单行：先 onDismiss，再打开面板并切 tab。
-    const menuFor = (kind) => actions.find((item) => item.definition.id === `dsh-game-more-${kind}`).component
+    // 菜单行：先 onDismiss，再打开面板（tab 由面板内工具条切）。
+    const menu = actions[0].component
     let dismissed = 0
     const openSpy = []
-    const props = { onDismiss: () => { dismissed += 1 }, open: (kind) => openSpy.push(kind) }
-    const pokerMenu = menuFor('poker')(props)
-    const mahjongMenu = menuFor('mahjong')(props)
-    check('菜单行文案正确', markup(pokerMenu).includes('德州扑克') && markup(mahjongMenu).includes('麻将'))
+    const props = { onDismiss: () => { dismissed += 1 }, open: (...args) => openSpy.push(args[0] ?? null) }
+    check('菜单行文案是「游戏」', markup(menu(props)).includes('游戏'))
 
     // 组件收到的是「宿主 props + 注入 props」；onSelect 是真正挂到按钮上的回调。
-    const pokerProps = menuFor('poker')({ ...props, ...{ open: host.ctx.slots ? props.open : props.open } })
-    pokerProps.props.onSelect()
-    check('点「德州扑克」：先 onDismiss 再 open(poker)', dismissed === 1 && openSpy[0] === 'poker', `dismissed=${dismissed} open=${openSpy.join(',')}`)
-
-    const mahjongProps = menuFor('mahjong')(props)
-    mahjongProps.props.onSelect()
-    check('点「麻将」：先 onDismiss 再 open(mahjong)', dismissed === 2 && openSpy[1] === 'mahjong', `dismissed=${dismissed} open=${openSpy.join(',')}`)
+    const menuProps = menu(props)
+    menuProps.props.onSelect()
+    check('点「游戏」：先 onDismiss 再 open()', dismissed === 1 && openSpy[0] === null, `dismissed=${dismissed} open=${openSpy.join(',')}`)
 
     // openGame 由 apply 注入到「更多」菜单组件的 props 上：直接调用注册时的 inject() 验证。
     const injected = actions[0].definition.inject()
     check('菜单行注入了 open 回调', typeof injected.open === 'function')
+    injected.open()
+    check('open() 会调用 layout.selectPanel("dsh-game")', host.selectedPanels[host.selectedPanels.length - 1] === 'dsh-game', `panels=${host.selectedPanels.join(',')}`)
     injected.open('mahjong')
-    check('open 会调用 layout.selectPanel("dsh-game")', host.selectedPanels[host.selectedPanels.length - 1] === 'dsh-game', `panels=${host.selectedPanels.join(',')}`)
+    check('open("mahjong") 仍能指定 tab', host.selectedPanels[host.selectedPanels.length - 1] === 'dsh-game', `panels=${host.selectedPanels.join(',')}`)
 
     // tab 已切到麻将：重新渲染面板应反映出来（模块级 tab 状态）。
     panelHtml = markup(React.createElement(mains[0].component, { selectConversation: () => {} }))
@@ -164,9 +178,9 @@ function main() {
     const fallback = await loadClient({ withPrimitives: false })
     const fallbackHost = makeHost()
     fallback.exports.apply(fallbackHost.ctx)
-    const fallbackMenu = fallbackHost.registrations.find((item) => item.definition.id === 'dsh-game-more-poker').component
-    const fallbackHtml = markup(fallbackMenu({ onDismiss: () => {}, open: () => {} }))
-    check('缺少 primitives 时降级为原生按钮', fallbackHtml.includes('role="menuitem"') && fallbackHtml.includes('德州扑克'))
+    const fallbackMenu = fallbackHost.registrations.find((item) => item.definition.id === 'dsh-game-more').component
+    const fallbackHtml = markup(React.createElement(fallbackMenu, { onDismiss: () => {}, open: () => {} }))
+    check('缺少 primitives 时降级为原生按钮', fallbackHtml.includes('role="menuitem"') && fallbackHtml.includes('游戏'))
 
     const passed = results.filter((item) => item.ok).length
     const failed = results.length - passed

@@ -49,7 +49,7 @@ The backend is long-running, so in practice it belongs in a systemd unit. That u
 
 ## Usage
 
-1. Open **More** in the DSH sidebar and pick **德州扑克** or **麻将**. The panel opens on the matching tab.
+1. Open **More** in the DSH sidebar and pick **游戏**. The panel opens on the poker tab; switch to 麻将 with the two tabs in the toolbar.
 2. Poker: **开始牌局** deals a heads-up hand. Your cards are face up, the action buttons are below, and the right column shows hand strength, equity, pot odds, call EV, a recommendation and the hand history.
 3. Mahjong: **开始牌局**, choose the missing suit (定缺), then draw and discard. Fourteen tiles means it is your turn to discard; the recommended tile is marked.
 4. The toolbar has **返回对话**, **刷新** and **新窗口打开**. Switching tabs points the iframe at the other game; the backend keeps both games alive.

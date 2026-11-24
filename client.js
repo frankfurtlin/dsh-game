@@ -3,9 +3,9 @@
  *
  * 手写 ModuleLoader 工厂，不经打包：只依赖宿主已提供的 react，用 h() 直接构造元素。
  * 做两件事：
- *   1. 在侧栏「更多」菜单（sidebar.panellist.actions）注册**两行**：「德州扑克」与
- *      「麻将」。点任一行都会 onDismiss 关菜单，再 layout.selectPanel 打开同一个
- *      主面板，并让面板切到对应 tab —— 不注册 sideb.panellist 常驻行。
+ *   1. 在侧栏「更多」菜单（sidebar.panellist.actions）注册**一行「游戏」**：点它会
+ *      onDismiss 关菜单，再 layout.selectPanel 打开主面板（保留上次的 tab，默认扑克）。
+ *      扑克/麻将不再各占一行，改由面板内的 tab 切换 —— 不注册 sideb.panellist 常驻行。
  *   2. 在 main 座位注册 keyed 面板（key = 'dsh-game'）：工具条（返回对话 / 刷新 /
  *      新窗口 + 扑克/麻将两个 tab 按钮）+ 同源 iframe（/game/poker/ 或
  *      /game/mahjong/，反代见 lib/index.js）。
@@ -23,10 +23,10 @@ window.__ModuleLoader__.load({
     var react = require("react");
     var h = react.createElement;
 
-    /** 面板 id —— main 座位的 key，也是「更多」菜单两行的锚点。 */
+    /** 面板 id —— main 座位的 key，也是「更多」菜单那一行的锚点。 */
     var PANEL_ID = "dsh-game";
     /** 「更多」菜单里的排序：排在插件类入口之后（调酒是 40）。 */
-    var MORE_ORDER = { poker: 41, mahjong: 42 };
+    var MORE_ORDER = 41;
 
     /** 两个 tab 的元数据；kind 同时是 URL 段（/game/<kind>/）与 data 锚点。 */
     var TABS = [
@@ -152,6 +152,30 @@ window.__ModuleLoader__.load({
         h("rect", { x: 2.6, y: 1.8, width: 10.8, height: 12.4, rx: 2 }),
         h("circle", { cx: 8, cy: 8, r: 2.7 }),
         h("path", { d: "M5.6 5.6h4.8v4.8H5.6z", opacity: 0 }),
+      );
+    }
+
+    /** 游戏手柄：「更多」菜单里「游戏」这一行用，扑克/麻将合并在面板内切 tab。 */
+    function GameIcon(props) {
+      var size = (props && props.size) || 16;
+      return h(
+        "svg",
+        {
+          viewBox: "0 0 16 16",
+          width: size,
+          height: size,
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 1.3,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          "aria-hidden": "true",
+          focusable: "false",
+        },
+        h("rect", { x: 1.6, y: 4.6, width: 12.8, height: 6.8, rx: 3.4 }),
+        h("path", { d: "M5.1 6.9v3.2M3.5 8.5h3.2" }),
+        h("circle", { cx: 10.5, cy: 7.7, r: 0.75 }),
+        h("circle", { cx: 11.8, cy: 9.3, r: 0.75 }),
       );
     }
 
@@ -341,57 +365,54 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 「更多」菜单里的一行：点它先关菜单，再打开面板并切到 kind 对应的 tab。
-     * @param {string} kind poker / mahjong
+     * 「更多」菜单里的唯一一行「游戏」：先关菜单，再打开面板。
+     * 扑克 / 麻将由面板内工具条切 tab，菜单不再按玩法分行。
      */
-    function makeMenuItem(kind) {
-      var info = tabInfo(kind);
-      return function GameMenuItem(props) {
-        var injected = props || {};
-        var onSelect = function () {
-          if (typeof props.onDismiss === "function") {
-            try {
-              props.onDismiss();
-            } catch (error) {
-              console.warn("[dsh-game] 关闭「更多」菜单失败:", error);
-            }
+    function GameMenuItem(props) {
+      var injected = props || {};
+      var onSelect = function () {
+        if (typeof props.onDismiss === "function") {
+          try {
+            props.onDismiss();
+          } catch (error) {
+            console.warn("[dsh-game] 关闭「更多」菜单失败:", error);
           }
-          if (typeof injected.open === "function") injected.open(kind);
-        };
-        if (primitives && primitives.MenuItemButton) {
-          return h(
-            primitives.MenuItemButton,
-            { onSelect: onSelect, icon: tabIcon(kind, 16) },
-            h("span", { "data-dsh-game-more": kind }, info.label),
-          );
         }
-        return h(
-          "button",
-          {
-            type: "button",
-            role: "menuitem",
-            onClick: onSelect,
-            "data-dsh-game-more": kind,
-            style: {
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              width: "100%",
-              padding: "7px 12px",
-              border: 0,
-              borderRadius: 6,
-              background: "transparent",
-              color: "inherit",
-              font: "inherit",
-              fontSize: 13,
-              textAlign: "left",
-              cursor: "pointer",
-            },
-          },
-          tabIcon(kind, 16),
-          h("span", null, info.label),
-        );
+        if (typeof injected.open === "function") injected.open();
       };
+      if (primitives && primitives.MenuItemButton) {
+        return h(
+          primitives.MenuItemButton,
+          { onSelect: onSelect, icon: h(GameIcon, { size: 16 }) },
+          h("span", { "data-dsh-game-more": "game" }, "游戏"),
+        );
+      }
+      return h(
+        "button",
+        {
+          type: "button",
+          role: "menuitem",
+          onClick: onSelect,
+          "data-dsh-game-more": "game",
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            width: "100%",
+            padding: "7px 12px",
+            border: 0,
+            borderRadius: 6,
+            background: "transparent",
+            color: "inherit",
+            font: "inherit",
+            fontSize: 13,
+            textAlign: "left",
+            cursor: "pointer",
+          },
+        },
+        h(GameIcon, { size: 16 }),
+        h("span", null, "游戏"),
+      );
     }
 
     // ---------------------------------------------------------------- 注册
@@ -402,9 +423,9 @@ window.__ModuleLoader__.load({
     function apply(ctx) {
       var disposers = [];
 
+      /** 打开游戏面板；kind 可选（面板工具条也用这条路径切 tab），不传就保留当前 tab。 */
       var openGame = function (kind) {
-        // 先切 tab 再开面板：面板未挂载时挂载即取 activeTab；已挂载时订阅者会立即切。
-        setActiveTab(kind);
+        if (kind) setActiveTab(kind);
         try {
           ctx.layout.selectPanel(PANEL_ID);
         } catch (error) {
@@ -436,34 +457,19 @@ window.__ModuleLoader__.load({
             );
           }),
         );
-        // 「更多」菜单两行：各自独立注册、各自渲染一行，点击都打开同一个面板。
+        // 「更多」菜单一行「游戏」：扑克/麻将合并成一个入口，面板内再切 tab。
         disposers.push(
           slots.inject("sidebar.panellist.actions", function () {
             return slots.register(
               {
                 name: "sidebar.panellist.actions",
-                id: "dsh-game-more-poker",
-                order: MORE_ORDER.poker,
+                id: "dsh-game-more",
+                order: MORE_ORDER,
                 inject: function () {
                   return { open: openGame };
                 },
               },
-              makeMenuItem("poker"),
-            );
-          }),
-        );
-        disposers.push(
-          slots.inject("sidebar.panellist.actions", function () {
-            return slots.register(
-              {
-                name: "sidebar.panellist.actions",
-                id: "dsh-game-more-mahjong",
-                order: MORE_ORDER.mahjong,
-                inject: function () {
-                  return { open: openGame };
-                },
-              },
-              makeMenuItem("mahjong"),
+              GameMenuItem,
             );
           }),
         );
