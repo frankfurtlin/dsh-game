@@ -32,14 +32,16 @@ dsh-game 把「德州扑克训练器」和「四川麻将训练器」接进 DSH 
 
 ## 安装
 
+下面的命令假设仓库检出在 `/opt/dsh/dsh-game`，放在别处就替换成实际路径。
+
 ```bash
 # 1) 装插件（写 profile 的 link: 依赖 + dsh.profile.bundles），然后重启 DSH Web
-dsh plugin --profile web add /root/workspace/plugins/dsh-game
+dsh plugin --profile web add /opt/dsh/dsh-game
 # 再把 "dsh-game" 加进 profile package.json 的 dsh.profile.bundles
 systemctl restart deepseek-harness.service
 
 # 2) 起游戏后端（FastAPI，监听 127.0.0.1:8817；生产由 systemd 常驻）
-cd /root/workspace/plugins/dsh-game/server
+cd /opt/dsh/dsh-game/server
 /usr/bin/python3.11 -m uvicorn app.main:app --host 127.0.0.1 --port 8817
 ```
 
@@ -84,7 +86,7 @@ DSH Web 插件：把「德州扑克训练器」和「四川麻将训练器」接
 依赖系统 Python（本机已装 fastapi 0.142.2 / uvicorn 0.54.0），**不建 venv**：
 
 ```bash
-cd /root/workspace/plugins/dsh-game/server
+cd /opt/dsh/dsh-game/server
 /usr/bin/python3.11 -m uvicorn app.main:app --host 127.0.0.1 --port 8817
 ```
 
@@ -97,7 +99,7 @@ cd /root/workspace/plugins/dsh-game/server
 三套脚本都不需要装进 DSH 也能跑（脚本自己拉起/清理后端，需要 Playwright 时用本机已装的副本）：
 
 ```bash
-cd /root/workspace/plugins/dsh-game
+cd /opt/dsh/dsh-game
 node verification/verify-app.mjs      # Playwright：真实点击两个游戏（19 项）
 node verification/verify-host.mjs     # 反代 + 鉴权闸门（8 项）
 node verification/verify-client.mjs   # 客户端注册形状 + 组件渲染（17 项）
@@ -118,7 +120,7 @@ node verification/verify-client.mjs   # 客户端注册形状 + 组件渲染（1
 
 `verify-client.mjs` 用 mock 的 `slots`/`layout` + 宿主 react 18 渲染组件，证明注册形状（main `key=dsh-game`、两行 action 的 id/order）、双 tab、iframe 地址、点菜单的顺序（先 `onDismiss` 再 `open` → `selectPanel('dsh-game')`）、切换 tab 后的 iframe，以及没有 primitives 时降级为原生按钮。
 
-> **尚未在真实 DSH 里验收**：本机约定禁止我安装插件 / 改 `/root/.dsh`，所以「更多」菜单实际渲染与面板嵌入需要 Lead 安装后在浏览器里点一遍（重点是两行菜单项与 `/game/` 反代）。上面三套脚本保证的是插件自身逻辑正确；DSH 装载环节失败时，先看 `dsh` 日志里 `dsh-game` 的加载错误。
+> **尚未在真实 DSH 里验收**：本机约定禁止我安装插件 / 改 `~/.dsh`，所以「更多」菜单实际渲染与面板嵌入需要 Lead 安装后在浏览器里点一遍（重点是两行菜单项与 `/game/` 反代）。上面三套脚本保证的是插件自身逻辑正确；DSH 装载环节失败时，先看 `dsh` 日志里 `dsh-game` 的加载错误。
 
 ### 与 betterlife 的关系 / 改动范围
 

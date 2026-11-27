@@ -33,15 +33,17 @@ That equity block is what the right-hand panel shows during a hand. The same res
 
 ## Install
 
+The commands below assume the checkout is at `/opt/dsh/dsh-game` — substitute your own path if it lives elsewhere.
+
 ```bash
 # 1) Plugin half
-dsh plugin --profile web add /root/workspace/plugins/dsh-game
+dsh plugin --profile web add /opt/dsh/dsh-game
 # then add "dsh-game" to dsh.profile.bundles, and restart DSH Web
 systemctl restart deepseek-harness.service
 
 # 2) Game half: FastAPI on 127.0.0.1:8817, using the system Python 3.11
 #    (fastapi + uvicorn; this repo has no venv and no requirements file)
-cd /root/workspace/plugins/dsh-game/server
+cd /opt/dsh/dsh-game/server
 /usr/bin/python3.11 -m uvicorn app.main:app --host 127.0.0.1 --port 8817
 ```
 
