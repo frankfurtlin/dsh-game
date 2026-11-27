@@ -29,7 +29,7 @@ http://127.0.0.1:3080/game/poker/
 ## 命令行版本
 
 ```bash
-# 在插件根目录（/root/workspace/plugins/dsh-game/server）执行
+# 在插件根目录（/opt/dsh/dsh-game/server）执行
 /usr/bin/python3.11 -m app.domains.poker.cli            # 单挑交互, 默认对手=松凶
 /usr/bin/python3.11 -m app.domains.poker.cli n6         # 六人桌交互
 /usr/bin/python3.11 -m app.domains.poker.cli demo 200   # 单挑自动对战 200 手

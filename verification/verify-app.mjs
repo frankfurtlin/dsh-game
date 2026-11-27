@@ -21,6 +21,7 @@
 import { spawn } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -41,7 +42,7 @@ function check(name, ok, detail) {
 function loadPlaywright() {
   const candidates = [
     process.env.PLAYWRIGHT_MODULE_DIR,
-    '/root/workspace/hermes-site/tools/node_modules/',
+    join(homedir(), 'workspace/hermes-site/tools/node_modules/'),
     join(ROOT, 'node_modules/'),
   ].filter(Boolean)
   const errors = []

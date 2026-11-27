@@ -11,12 +11,13 @@
  *   3. 点「游戏」菜单行：先 onDismiss 关菜单，再 layout.selectPanel('dsh-game')；
  *      扑克 / 麻将改由面板内工具条切 tab（注入的 open(kind) 仍支持指定 tab）。
  *
- * 为什么不用真 DSH：本机约定禁止我安装插件 / 改 /root/.dsh。真实 DSH 里的最终
+ * 为什么不用真 DSH：本机约定禁止我安装插件 / 改 ~/.dsh。真实 DSH 里的最终
  * 点击验收由 Lead 安装后执行；本脚本覆盖注册形状与组件行为（宿主 API 是 mock）。
  *
  * 用法：node verification/verify-client.mjs
  */
 import { createRequire } from 'node:module'
+import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -29,10 +30,11 @@ const require = createRequire(import.meta.url)
  * 覆盖入口：DSH_GAME_REACT_DIR=<含 react 的 node_modules 目录>。
  */
 function loadReact() {
+  const dshHome = process.env.DSH_HOME || join(homedir(), '.dsh')
   const candidates = [
     process.env.DSH_GAME_REACT_DIR,
-    '/root/.dsh/profiles/web/node_modules',
-    '/root/workspace/plugins/dsh-creative-studio/threeui-src/node_modules',
+    join(dshHome, 'profiles/web/node_modules'),
+    join(homedir(), 'workspace/plugins/dsh-creative-studio/threeui-src/node_modules'),
   ].filter(Boolean)
   for (const dir of candidates) {
     try {

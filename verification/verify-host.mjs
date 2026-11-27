@@ -3,7 +3,7 @@
  * dsh-game 的 host 半验收（反代逻辑，不经 DSH 安装）。
  *
  * 为什么需要它：接受度测试要在真实 DSH 里装插件才能点「更多」菜单，而本机约定
- * 禁止我改 /root/.dsh 或安装插件。这里把 `lib/index.js` 的 `createHandler` 拉出来，
+ * 禁止我改 ~/.dsh 或安装插件。这里把 `lib/index.js` 的 `createHandler` 拉出来，
  * 配一个假的 `ctx.connection`（模拟 DSH 的鉴权闸门）和一个临时 HTTP 端口，
  * 用真实请求证明：
  *
